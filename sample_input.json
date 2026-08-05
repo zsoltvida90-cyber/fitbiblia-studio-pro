@@ -1,0 +1,44 @@
+{
+  "jobId": "day1_demo",
+  "output": "output",
+  "format": "both",
+  "hookVariant": "a",
+  "slides": [
+    {
+      "type": "cover",
+      "niche": "edzes",
+      "kicker": "MANIFESZTUM",
+      "headline": "Mi a valószínűségeket mérjük.",
+      "hookWord": "valószínűségeket",
+      "subtitle": "A fitness világ tele van magabiztos ígéretekkel.",
+      "swipeHint": "LAPOZZ →",
+      "ghostNumber": "01"
+    },
+    {
+      "type": "inner",
+      "folio": "02 / 06",
+      "kicker": "A ZAJ",
+      "headline": "Marketing, nem tudomány.",
+      "body": [
+        { "text": "Ha valaki azt állítja, megtalálta a „tökéletes” diétát mindenkinek, az nem " },
+        { "text": "tudományt árul, hanem marketinget", "emphasis": true },
+        { "text": "." }
+      ],
+      "ghostNumber": "02"
+    },
+    {
+      "type": "data",
+      "folio": "DOSSZIÉ T3·03 / 06",
+      "readout": "1 vs 12",
+      "figureLabel": "1 TÖRVÉNY vs 12 ZAJ",
+      "source": "Hall KD et al., Cell Metab. 2019;30(1):67-77."
+    },
+    {
+      "type": "cta",
+      "kicker": "KEZDD ITT",
+      "headline": "Kezdd itt.",
+      "subtitle": "Töltsd le a PDF-et a profilban.",
+      "cta": "Tedd félre későbbre, és mentsd el ezt a posztot indításként!"
+    }
+  ]
+}

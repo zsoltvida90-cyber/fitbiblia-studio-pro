@@ -1,0 +1,84 @@
+{
+  "jobId": "fit_biblia_full_carousel_01",
+  "output": "output",
+  "format": "both",
+  "hookVariant": "a",
+  "slides": [
+    {
+      "type": "cover",
+      "niche": "edzes",
+      "kicker": "FIT BIBLIA DOSZSZIER",
+      "headline": "A ZSÍRÉGETÉS 5 LEGNAGYOBB TÉVHITE",
+      "hookWord": "ZSÍRÉGETÉS",
+      "subtitle": "Miért nem működnek a csodamódszerek, és mit mond a tudomány.",
+      "swipeHint": "LAPOZZ →",
+      "ghostNumber": "01"
+    },
+    {
+      "type": "inner",
+      "folio": "02 / 07",
+      "kicker": "1. MÍTOSZ",
+      "headline": "Lokális zsírégetés nem létezik.",
+      "body": [
+        { "text": "Nem tudsz csak hasról zsírt égetni felülésekkel. A zsírégetés " },
+        { "text": "szisztémás folyamat az egész testen", "emphasis": true },
+        { "text": ", nem lokális gyakorlatok eredménye." }
+      ],
+      "ghostNumber": "02"
+    },
+    {
+      "type": "myth",
+      "folio": "03 / 07",
+      "kicker": "2. MÍTOSZ VS. VALÓSÁG",
+      "headline": "Esti szénhidrátfogyasztás",
+      "body": [
+        { "text": "Az este 6 után megevett szénhidrát azonnal zsírrá alakul." }
+      ],
+      "truth": [
+        { "text": "A napi kalóriaegyenleg számít, " },
+        { "text": "nem az óra állása", "emphasis": true },
+        { "text": "." }
+      ],
+      "ghostNumber": "03"
+    },
+    {
+      "type": "data",
+      "folio": "DOSSZIÉ T3·04 / 07",
+      "kicker": "3. TÖRVÉNY",
+      "readout": "-500 kcal",
+      "figureLabel": "A FOGYÁS EGYETLEN TÖRVÉNYE: NAPI ENERGIADEFICIT",
+      "source": "Hall KD et al., Cell Metab. 2019;30(1):67-77."
+    },
+    {
+      "type": "inner",
+      "folio": "05 / 07",
+      "kicker": "4. MÍTOSZ",
+      "headline": "Detox és zsírégető teák",
+      "body": [
+        { "text": "Nincs olyan tea vagy étrend-kiegészítő, ami önmagában zsírt éget. A " },
+        { "text": "méregtelenítést a máj és a vese végzi", "emphasis": true },
+        { "text": ", nem az illatos teák." }
+      ],
+      "ghostNumber": "05"
+    },
+    {
+      "type": "inner",
+      "folio": "06 / 07",
+      "kicker": "5. MÍTOSZ",
+      "headline": "Kardió vs. Súlyzós edzés",
+      "body": [
+        { "text": "A kardió elengedhetetlen, de a " },
+        { "text": "súlyzós edzés megőrzi az izomtömeget", "emphasis": true },
+        { "text": " és megemeli a nyugalmi anyagcserét." }
+      ],
+      "ghostNumber": "06"
+    },
+    {
+      "type": "cta",
+      "kicker": "TUDOMÁNYOS UTALÁS",
+      "headline": "Tudományos alapú útmutató",
+      "subtitle": "Készen állsz a valóságra?",
+      "cta": "Mentsd el ezt a posztot és oszd meg másokkal is!"
+    }
+  ]
+}

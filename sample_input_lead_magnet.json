@@ -1,0 +1,79 @@
+{
+  "jobId": "a_fogyas_torvenye_lead_magnet",
+  "output": "output",
+  "docTitle": "FIT BIBLIA • A FOGYÁS TÖRVÉNYE",
+  "format": "both",
+  "slides": [
+    {
+      "type": "cover",
+      "badge": "INGYENES LEAD MAGNET • T3 KIVONAT",
+      "headerLeft": "BIZONYÍTÉK-ALAPÚ KIVONAT",
+      "headline": "A FOGYÁS TÖRVÉNYE",
+      "hookWord": "TÖRVÉNYE",
+      "subtitle": "Bizonyíték-alapú útmutató a tartós zsívesztés fiziológiájához.",
+      "keyPoints": {
+        "title": "AMIT EBBŐL A KIVONATBÓL MEGTUDSZ:",
+        "text": [
+          { "text": "Az energiamérleg tudományos képlete, a " },
+          { "text": "fehérjebevitel optimális aránya", "emphasis": true },
+          { "text": " és a heti fenntartható fogyási tempó." }
+        ]
+      },
+      "folio": "01 / 04"
+    },
+    {
+      "type": "formula",
+      "headerLeft": "01. FEJEZET • ENERGIAMÉRLEG",
+      "headline": "Az egyetlen törvény: Energiamérleg",
+      "body": [
+        { "text": "A zsírégetés nem varázslat, hanem számtan. A szervezet kizárólag akkor nyúl a raktározott zsírkészletekhez, ha a napi energiafelhasználás " },
+        { "text": "tartósan meghaladja a bevitelt", "emphasis": true },
+        { "text": "." }
+      ],
+      "formula": {
+        "label": "AZ ENERGIAMÉRLEG KEMÉNY EGYENLETE",
+        "expression": "BEVITEL − LEADÁS < 0 ⇒ ZSÍRVESZTÉS"
+      },
+      "keyPoints": {
+        "title": "KULCSÁLLÍTÁS:",
+        "text": "Nincs varázsdiéta. Minden működő étrend (Keto, IF, IIFYM) kizárólag a kalóriadeficit létrehozásával tud zsírt égetni."
+      },
+      "folio": "02 / 04"
+    },
+    {
+      "type": "stat",
+      "headerLeft": "02. FEJEZET • MAKROK ÉS TEMPÓ",
+      "headline": "A fehérje és a fenntartható tempó",
+      "stats": [
+        {
+          "number": "1,6 – 2,2 g",
+          "label": "FEHÉRJE / TESTTÖMEG-KG / NAP"
+        },
+        {
+          "number": "0,5 – 1%",
+          "label": "HETI OPTIMÁLIS FOGYÁSI TEMPÓ"
+        }
+      ],
+      "items": [
+        [
+          { "text": "A fehérje megőrzi a " },
+          { "text": "vázizomzatot deficitben", "emphasis": true },
+          { "text": " és maximalizálja a teltségérzetet." }
+        ],
+        [
+          { "text": "A túlzottan drasztikus koplalás izomvesztést és mentális kiégést okoz." }
+        ]
+      ],
+      "folio": "03 / 04"
+    },
+    {
+      "type": "cta",
+      "headerLeft": "ÖSSZEFOGLALÁS & AKCIÓ",
+      "headline": "Lépj a tudományos cselekvés útjára",
+      "subtitle": "Szerezd meg a teljes 39 oldalas T3 mesterkönyvet!",
+      "body": "Elég a marketingzajból és a csodadiétákból. A Fit Biblia T3 könyve lépésről lépésre végigvezet a teljes étrend- és edzésterv protokollon.",
+      "ctaText": "LETÖLTÖM A TELJES KÖNYVET",
+      "folio": "04 / 04"
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+node_modules/
+temp_web/
+projects.db
+.gemini/
+*.pdf
+*.zip
+*.log

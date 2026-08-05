@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,800;0,900;1,900&family=Fraunces:ital,opsz,wght@1,9..144,900&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    width: {{WIDTH}}px;
+    height: {{HEIGHT}}px;
+    background-color: {{BG_COLOR}};
+    color: #D6CEBA;
+    font-family: 'Inter', sans-serif;
+    overflow: hidden;
+    position: relative;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .slide-container {
+    width: {{WIDTH}}px;
+    height: {{HEIGHT}}px;
+    padding: 100px 96px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    background: radial-gradient(circle at 50% 20%, #16191c 0%, {{BG_COLOR}} 80%);
+    position: relative;
+    overflow: hidden; /* Cleanly clip bleeding elements at canvas edge */
+  }
+
+  /* STRICT FIX: Ambient Glow moved to BOTTOM RIGHT */
+  .ambient-glow {
+    position: absolute;
+    bottom: -150px;
+    right: -150px;
+    left: auto;
+    top: auto;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    background: {{NICHE_COLOR}};
+    filter: blur(120px);
+    opacity: 0.15;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* Bleeding 3D Watermark (Editorial Magazine Style) */
+  .bg-watermark-number {
+    position: absolute;
+    bottom: 5%; /* Positioned lower */
+    right: -120px; /* Bleeding off the right edge */
+    font-family: 'Archivo', sans-serif;
+    font-size: 850px;
+    font-weight: 900;
+    line-height: 0.8;
+    color: transparent;
+    -webkit-text-stroke: 3px rgba(230, 193, 90, 0.04);
+    z-index: 0; 
+    pointer-events: none;
+    overflow: visible;
+  }
+
+  /* Top Clean Logo Row (Pure Logo without Text Badge) */
+  .top-logo-row {
+    display: flex;
+    justify-content: flex-end; /* Elegantly right-aligned logo */
+    align-items: center;
+    width: 100%;
+    z-index: 10;
+  }
+
+  .brand-logo-img {
+    height: {{LOGO_SIZE}}px;
+    object-fit: contain;
+    display: {{LOGO_DISPLAY}};
+  }
+
+  .content-area {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-top: {{OFFSET_Y}}px;
+    max-width: {{CONTENT_WIDTH}}px;
+    margin: 0 auto;
+    width: 100%;
+    z-index: 10;
+  }
+
+  /* Premium Brand Icon Styling */
+  .icon-box {
+    width: 64px;
+    height: 64px;
+    margin-bottom: 25px;
+    color: {{ACCENT_COLOR}};
+    filter: drop-shadow(0px 4px 10px rgba(230, 193, 90, 0.3));
+  }
+
+  .title-main {
+    font-family: 'Archivo', sans-serif;
+    font-weight: 900;
+    line-height: 1.1;
+    color: #E8DFC9;
+    text-transform: uppercase;
+    letter-spacing: -1px;
+  }
+
+  .hook-word {
+    font-family: 'Fraunces', serif;
+    font-style: italic;
+    font-weight: 900;
+    font-size: 84px;
+    line-height: 1.0;
+    text-transform: lowercase; /* STRICTLY LOWERCASE */
+    
+    background-image: url('/assets/textures/gold-tile-256.png'), linear-gradient(168deg, #B8860B 0%, #C8912E 20%, #E6C15A 42%, #FBF0C4 56%, #EFD066 72%, #B4801F 100%);
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    
+    display: block;
+    margin: 10px 0 25px 0;
+    filter: drop-shadow(0px 4px 12px rgba(230, 193, 90, 0.2));
+  }
+
+  .body-text {
+    line-height: 1.6;
+    color: #C7BEAB;
+  }
+
+  /* Instagram Action Bar for CTA Slide */
+  .ig-action-bar {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    background: rgba(20, 22, 24, 0.8);
+    border: 1px solid rgba(230, 193, 90, 0.3);
+    padding: 16px 24px;
+    border-radius: 12px;
+    margin-top: 30px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+    font-weight: 600;
+    color: {{ACCENT_COLOR}};
+    letter-spacing: 1.5px;
+  }
+</style>
+</head>
+<body>
+  <div class="slide-container">
+    <div class="ambient-glow"></div>
+    <div class="bg-watermark-number">{{WATERMARK_NUMBER}}</div>
+    {{SWIPE_ARROW_HTML}}
+    
+    <div class="top-logo-row">
+      <img src="/assets/brand/fit_biblia_logo_transparent_alt.png" class="brand-logo-img" alt="FIT BIBLIA" />
+    </div>
+
+    <div class="content-area">
+      {{ICON_HTML}}
+      {{CONTENT_BLOCK}}
+    </div>
+  </div>
+</body>
+</html>

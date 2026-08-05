@@ -1,0 +1,906 @@
+<!DOCTYPE html>
+<html lang="hu" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fit Biblia — Studio Pro Content Generator</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            obsidian: '#0C0D0E',
+            cardbg: '#141618',
+            bone: '#E8DFC9',
+            bodybone: '#D6CEBA',
+            gold: '#E6C15A',
+            grey: '#8F8B83',
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,800;0,900;1,900&family=Fraunces:ital,opsz,wght@1,9..144,900&family=IBM+Plex+Mono:wght@500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; }
+
+    /* Base Render CSS for 1:1 Live Preview */
+    .slide-container {
+      padding: 100px 96px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      position: relative;
+      text-align: left;
+      overflow: hidden; /* Cleanly clip bleeding elements at canvas edge */
+    }
+
+    /* STRICT FIX: Ambient Glow moved to BOTTOM RIGHT */
+    .ambient-glow {
+      position: absolute;
+      bottom: -150px;
+      right: -150px;
+      left: auto;
+      top: auto;
+      width: 600px;
+      height: 600px;
+      border-radius: 50%;
+      filter: blur(120px);
+      opacity: 0.15;
+      pointer-events: none;
+      z-index: 0;
+    }
+
+    /* Bleeding 3D Watermark (Editorial Magazine Style) */
+    .bg-watermark-number {
+      position: absolute;
+      bottom: 5%; /* Positioned lower */
+      right: -120px; /* Bleeding off the right edge */
+      font-family: 'Archivo', sans-serif;
+      font-size: 850px;
+      font-weight: 900;
+      line-height: 0.8;
+      color: transparent;
+      -webkit-text-stroke: 3px rgba(230, 193, 90, 0.04);
+      z-index: 0; 
+      pointer-events: none;
+      overflow: visible;
+    }
+
+    /* Top Clean Logo Row (Pure Logo without Text Badge) */
+    .top-logo-row {
+      display: flex;
+      justify-content: flex-end; /* Elegantly right-aligned logo */
+      align-items: center;
+      width: 100%;
+      z-index: 10;
+    }
+
+    .brand-logo-img {
+      height: var(--logo-size);
+      object-fit: contain;
+    }
+
+    .content-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      margin: 0 auto;
+      width: 100%;
+      z-index: 10;
+    }
+
+    /* Premium Brand Icon Styling */
+    .icon-box {
+      width: 64px;
+      height: 64px;
+      margin-bottom: 25px;
+      color: var(--accent);
+      filter: drop-shadow(0px 4px 10px rgba(230, 193, 90, 0.3));
+    }
+
+    .title-main {
+      font-family: 'Archivo', sans-serif;
+      font-size: var(--title-size);
+      font-weight: 900;
+      line-height: 1.1;
+      color: #E8DFC9;
+      text-transform: uppercase;
+      letter-spacing: -1px;
+    }
+
+    .hook-word {
+      font-family: 'Fraunces', serif;
+      font-style: italic;
+      font-weight: 900;
+      font-size: 84px;
+      line-height: 1.0;
+      text-transform: lowercase; /* STRICTLY LOWERCASE */
+      
+      background-image: url('/assets/textures/gold-tile-256.png'), linear-gradient(168deg, #B8860B 0%, #C8912E 20%, #E6C15A 42%, #FBF0C4 56%, #EFD066 72%, #B4801F 100%);
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      -webkit-background-clip: text;
+      background-clip: text;
+      -webkit-text-fill-color: transparent;
+      
+      display: block;
+      margin: 10px 0 25px 0;
+      filter: drop-shadow(0px 4px 12px rgba(230, 193, 90, 0.2));
+    }
+
+    .body-text {
+      font-size: var(--body-size);
+      line-height: 1.6;
+      color: #C7BEAB;
+    }
+
+    /* Instagram Action Bar for CTA Slide */
+    .ig-action-bar {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      background: rgba(20, 22, 24, 0.8);
+      border: 1px solid rgba(230, 193, 90, 0.3);
+      padding: 16px 24px;
+      border-radius: 12px;
+      margin-top: 30px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: 1.5px;
+    }
+      color: var(--accent);
+  </style>
+</head>
+<body class="bg-obsidian text-bodybone font-inter min-h-screen flex flex-col antialiased relative">
+
+  <!-- Strictly Enforced Floating Design Control Panel (Bottom Right) -->
+  <div style="position: fixed; bottom: 20px; right: 20px; background: #141618; border: 1px solid #E6C15A; padding: 15px; border-radius: 8px; z-index: 9999;" class="w-80 shadow-2xl space-y-3">
+    <div class="flex items-center justify-between border-b border-gray-800 pb-2">
+      <span class="text-xs font-mono font-bold text-gold uppercase tracking-widest flex items-center space-x-1">
+        <span>🎨 Design & Tipográfia Vezérlők</span>
+      </span>
+      <span class="text-[10px] text-grey font-mono">AUTO-SAVED</span>
+    </div>
+
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <label class="text-[11px] text-grey block mb-1">Háttérszín</label>
+        <input type="color" id="bgColor" value="#0C0D0E" class="w-full h-8 bg-[#0C0D0E] border border-gray-800 rounded cursor-pointer p-0.5" />
+      </div>
+      <div>
+        <label class="text-[11px] text-grey block mb-1">Kiemelés Színe</label>
+        <input type="color" id="accentColor" value="#E6C15A" class="w-full h-8 bg-[#0C0D0E] border border-gray-800 rounded cursor-pointer p-0.5" />
+      </div>
+    </div>
+
+    <!-- Font Size Sliders in Floating Palette -->
+    <div>
+      <div class="flex justify-between text-[11px] text-grey mb-1">
+        <span>Főcím mérete (px)</span>
+        <span id="titleSizeVal" class="text-bone font-mono">60px</span>
+      </div>
+      <input type="range" id="globalTitleSize" min="30" max="100" value="60" class="w-full accent-gold bg-[#0C0D0E]" />
+    </div>
+
+    <div>
+      <div class="flex justify-between text-[11px] text-grey mb-1">
+        <span>Főszöveg mérete (px)</span>
+        <span id="bodySizeVal" class="text-bone font-mono">26px</span>
+      </div>
+      <input type="range" id="globalBodySize" min="16" max="40" value="26" class="w-full accent-gold bg-[#0C0D0E]" />
+    </div>
+
+    <div>
+      <div class="flex justify-between text-[11px] text-grey mb-1">
+        <span>Logó mérete (px)</span>
+        <span id="logoSizeVal" class="text-bone font-mono">80px</span>
+      </div>
+      <input type="range" id="logoSize" min="20" max="160" value="80" class="w-full accent-gold bg-[#0C0D0E]" />
+    </div>
+
+    <div class="flex items-center space-x-2 pt-1 border-t border-gray-800">
+      <input type="checkbox" id="showLogo" checked class="accent-gold h-4 w-4" />
+      <label for="showLogo" class="text-xs text-bone font-medium cursor-pointer">FIT BIBLIA logó megjelenítése</label>
+    </div>
+  </div>
+
+  <!-- Header -->
+  <header class="border-b border-gray-800 bg-[#101214] px-8 py-3.5 flex items-center justify-between z-30">
+    <div class="flex items-center space-x-3">
+      <span class="text-gold font-mono font-bold tracking-widest text-lg">FIT BIBLIA</span>
+      <span class="text-xs font-mono uppercase bg-gold/10 text-gold border border-gold/30 px-2.5 py-0.5 rounded-full">Studio Pro v8.3</span>
+    </div>
+    <div class="flex items-center space-x-6 text-xs font-mono text-grey">
+      <span>DECK: <span id="deckCountLabel" class="text-bone font-bold">1 Slide</span></span>
+      <span>HEADER: <span class="text-gold font-bold">CLEAN LOGO ONLY</span></span>
+    </div>
+  </header>
+
+  <!-- Main Workspace -->
+  <main class="flex-1 flex overflow-hidden">
+    
+    <!-- Sticky Sidebar / Studio Editor Panel -->
+    <aside class="w-[520px] border-r border-gray-800 bg-[#121416] p-6 sticky top-0 h-screen overflow-y-auto space-y-6">
+      
+      <!-- AI Magic Box Section -->
+      <section class="space-y-3 p-4 bg-cardbg/80 border border-gold/40 rounded-xl">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-mono tracking-widest text-gold uppercase font-bold flex items-center space-x-2">
+            <span>⚡ Okosdoboz (Magic Box Parser)</span>
+          </h3>
+          <span class="text-[10px] text-grey font-mono font-bold">LIVE DOM ENGINE</span>
+        </div>
+        <textarea id="magicBoxInput" rows="4" placeholder="S1: A FOGYÁS TÖRVÉNYE&#10;A zsírégetés alaptörvénye a tartós kalóriadeficit.&#10;&#10;S2: Energiamérleg Szabálya&#10;Az energiaegyenleg szabályozza a testtömeg változását.&#10;&#10;CTA: Mentsd el ezt a posztot!" class="w-full bg-[#0C0D0E] border border-gray-800 rounded-lg p-2.5 text-xs text-bone focus:border-gold focus:outline-none">S1: A FOGYÁS TÖRVÉNYE
+A zsírégetés alaptörvénye a tartós kalóriadeficit. A szervezet kizárólag hiány esetén bont zsírt.
+
+S2: Energiamérleg Szabálya
+Az energiaegyenleg szabályozza a testtömeg változását.
+
+S3 (adat): -500 kcal
+A fenntartható zsívesztés tudományosan igazolt aranyszabálya.
+
+CTA: Mentsd el ezt a posztot!
+Napi bizonyíték-alapú fitnesz és táplálkozási tartalmak.</textarea>
+        <button id="generateAiBtn" class="w-full py-2 bg-gold/10 hover:bg-gold/20 text-gold border border-gold/40 font-mono font-bold text-xs uppercase rounded-lg transition flex items-center justify-center space-x-2">
+          <span>SLIDE-OK GENERÁLÁSA SZÖVEGBŐL (OKOSDOBOZ)</span>
+        </button>
+      </section>
+
+      <!-- Global Format Settings -->
+      <section class="space-y-4 p-4 bg-cardbg/50 border border-gray-800 rounded-xl">
+        <h3 class="text-xs font-mono tracking-widest text-gold uppercase font-bold">Globális Formátum & Kategória</h3>
+        
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-grey block mb-1">Kimeneti Formátum</label>
+            <select id="canvasFormat" class="w-full bg-[#0C0D0E] border border-gray-800 rounded p-2 text-xs text-bone focus:border-gold">
+              <option value="carousel" selected>Instagram (1080×1350)</option>
+              <option value="story">Story / TikTok (1080×1920)</option>
+              <option value="pdf">A4 Nyomdai PDF (1240×1754)</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-grey block mb-1">Kategória (Háttérfény)</label>
+            <select id="nicheSelect" class="w-full bg-[#0C0D0E] border border-gray-800 rounded p-2 text-xs text-bone focus:border-gold">
+              <option value="#25E67A" selected>Táplálalkozás (#25E67A)</option>
+              <option value="#FF7A1A">Edzés (#FF7A1A)</option>
+              <option value="#2E9BFF">Mindset (#2E9BFF)</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      <!-- Slide Deck Manager -->
+      <section class="space-y-3">
+        <div class="flex items-center justify-between">
+          <h3 class="text-xs font-mono tracking-widest text-gold uppercase font-bold">Slide Deck Kezelő</h3>
+          <button id="addSlideBtn" class="text-xs font-mono text-gold hover:text-yellow-400 font-bold uppercase flex items-center space-x-1">
+            <span>+ ÚJ SLIDE</span>
+          </button>
+        </div>
+        <!-- Slide Tab Selector List -->
+        <div id="slideList" class="flex space-x-2 overflow-x-auto pb-2 scrollbar-thin">
+          <!-- Rendered dynamically -->
+        </div>
+      </section>
+
+      <!-- Active Slide Editor -->
+      <section class="space-y-4 p-4 bg-cardbg/50 border border-gray-800 rounded-xl">
+        <div class="flex items-center justify-between border-b border-gray-800 pb-2">
+          <h3 class="text-xs font-mono tracking-widest text-gold uppercase font-bold" id="editorTitle">Szerkesztés: 1. Slide</h3>
+          <button id="deleteSlideBtn" class="text-[11px] font-mono text-red-400 hover:text-red-300 uppercase">[TÖRLÉS]</button>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-grey block mb-1">Slide Elrendezés</label>
+            <select id="slideType" class="w-full bg-[#0C0D0E] border border-gray-800 rounded p-2 text-xs text-bone focus:border-gold">
+              <option value="cover">Borító (Cover)</option>
+              <option value="inner">Belső tartalom (Inner)</option>
+              <option value="myth">Mítosz vs. Valóság (Myth)</option>
+              <option value="stat">Adat / Statisztika (Stat)</option>
+              <option value="cta">Záró Kép (CTA)</option>
+            </select>
+          </div>
+          <div>
+            <label class="text-xs text-grey block mb-1">Ikon Kiválasztása</label>
+            <select id="slideIcon" class="w-full bg-[#0C0D0E] border border-gray-800 rounded p-2 text-xs text-bone focus:border-gold">
+              <option value="none">Nincs ikon</option>
+              <option value="flame">Láng (flame)</option>
+              <option value="target">Céltábla (target)</option>
+              <option value="brain">Agy (brain)</option>
+              <option value="book">Könyv (book-open)</option>
+              <option value="check">Pipa (check-circle)</option>
+              <option value="alert">Figyelmeztetés (alert-triangle)</option>
+            </select>
+          </div>
+        </div>
+
+        <div>
+          <label class="text-xs text-grey block mb-1">Fejléc / Badge Szöveg (Opcionális - üresen elhagyható)</label>
+          <input type="text" id="slideBadge" placeholder="pl. INGYENES LEAD MAGNET" class="w-full bg-[#0C0D0E] border border-gray-800 rounded p-2 text-xs text-bone focus:border-gold focus:outline-none" />
+        </div>
+
+        <div>
+          <label class="text-xs text-grey block mb-1">Főcím / Title</label>
+          <input type="text" id="slideHeadline" class="w-full bg-[#0C0D0E] border border-gray-800 rounded p-2 text-xs font-bold text-bone focus:border-gold focus:outline-none" />
+        </div>
+
+        <div>
+          <label class="text-xs text-grey block mb-1">Hook Szó / Kiemelés (Kisbetűs arany textúra)</label>
+          <input type="text" id="slideHookWord" class="w-full bg-[#0C0D0E] border border-gray-800 rounded p-2 text-xs text-gold font-mono focus:border-gold focus:outline-none" />
+        </div>
+
+        <div>
+          <label class="text-xs text-grey block mb-1">Főszöveg / Body</label>
+          <textarea id="slideBody" rows="3" class="w-full bg-[#0C0D0E] border border-gray-800 rounded p-2 text-xs text-bone focus:border-gold focus:outline-none"></textarea>
+        </div>
+
+        <!-- Smart Positioning Sliders -->
+        <div class="space-y-3 pt-2 border-t border-gray-800">
+          <div class="text-xs font-mono text-gold font-bold">Finomhangolás & Pozicionálás</div>
+
+          <div>
+            <div class="flex justify-between text-xs text-grey mb-1">
+              <span>Vertikális Eltolás Y (px)</span>
+              <span id="offsetYVal" class="text-bone font-mono">0px</span>
+            </div>
+            <input type="range" id="slideOffsetY" min="0" max="250" value="0" class="w-full accent-gold bg-[#0C0D0E]" />
+          </div>
+
+          <div>
+            <div class="flex justify-between text-xs text-grey mb-1">
+              <span>Tartalom Szélessége X (px)</span>
+              <span id="contentWidthVal" class="text-bone font-mono">888px</span>
+            </div>
+            <input type="range" id="slideContentWidth" min="600" max="1000" value="888" class="w-full accent-gold bg-[#0C0D0E]" />
+          </div>
+        </div>
+      </section>
+
+      <!-- Action Export Button -->
+      <button id="generateBtn" class="w-full py-4 bg-gold hover:bg-yellow-400 text-obsidian font-mono font-bold tracking-widest text-sm uppercase rounded-xl shadow-xl transition flex items-center justify-center space-x-2">
+        <svg id="spinner" class="animate-spin -ml-1 mr-2 h-4 w-4 text-obsidian hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+        </svg>
+        <span id="btnText">ÖSSZES SLIDE EXPORTÁLÁSA (ZIP)</span>
+      </button>
+
+    </aside>
+
+    <!-- Preview Area: Multi-Slide Carousel Scroll View -->
+    <section class="flex-1 bg-[#08090a] p-8 flex flex-col items-center justify-start overflow-y-auto space-y-8 pb-32">
+      <div class="text-xs font-mono text-grey tracking-widest uppercase">Élő Multi-Slide Előnézet (Studio Carousel View)</div>
+      
+      <!-- Container holding all slides stacked -->
+      <div id="multiSlidePreview" class="flex flex-col items-center space-y-8 w-full">
+        <!-- Rendered dynamically -->
+      </div>
+    </section>
+
+  </main>
+
+  <script>
+    // 1. The slide state array
+    let slideDeck = [
+      {
+        id: Date.now(),
+        layout: 'cover',
+        type: 'cover',
+        badge: '',
+        title: 'A FOGYÁS TÖRVÉNYE',
+        headline: 'A FOGYÁS TÖRVÉNYE',
+        hookWord: 'törvénye',
+        body: 'A zsírégetés nem varázslat, hanem számtan. A szervezet kizárólag akkor nyúl a raktározott zsírkészletekhez, ha a napi energiafelhasználás tartósan meghaladja a bevitelt.',
+        icon: 'flame',
+        offsetY: 0,
+        contentWidth: 888
+      }
+    ];
+
+    let activeSlideIndex = 0;
+
+    // Load & Save Preferences via localStorage
+    function loadPreferences() {
+      const savedBg = localStorage.getItem('fitbiblia_bgColor');
+      const savedAccent = localStorage.getItem('fitbiblia_accentColor');
+      const savedLogoSize = localStorage.getItem('fitbiblia_logoSize');
+      const savedTitleSize = localStorage.getItem('fitbiblia_titleSize');
+      const savedBodySize = localStorage.getItem('fitbiblia_bodySize');
+
+      if (savedBg) document.getElementById('bgColor').value = savedBg;
+      if (savedAccent) document.getElementById('accentColor').value = savedAccent;
+      if (savedLogoSize) document.getElementById('logoSize').value = savedLogoSize;
+      if (savedTitleSize) document.getElementById('globalTitleSize').value = savedTitleSize;
+      if (savedBodySize) document.getElementById('globalBodySize').value = savedBodySize;
+    }
+
+    function savePreferences() {
+      localStorage.setItem('fitbiblia_bgColor', document.getElementById('bgColor').value);
+      localStorage.setItem('fitbiblia_accentColor', document.getElementById('accentColor').value);
+      localStorage.setItem('fitbiblia_logoSize', document.getElementById('logoSize').value);
+      localStorage.setItem('fitbiblia_titleSize', document.getElementById('globalTitleSize').value);
+      localStorage.setItem('fitbiblia_bodySize', document.getElementById('globalBodySize').value);
+    }
+
+    // 2. The parser function for Magic Box
+    function parseAIBox() {
+      const rawText = document.getElementById('magicBoxInput').value;
+      if (!rawText || !rawText.trim()) return alert('Kérlek írj szöveget az Okosdobozba!');
+
+      // Split by standard markers S1:, S2:, etc., or CTA:
+      const blocks = rawText.split(/(?=(?:S\d+(?:[^\:]*?)\:|CTA\:))/gi).filter(b => b.trim() !== '');
+      
+      slideDeck = []; // Clear current deck
+      
+      blocks.forEach((block, index) => {
+        let layout = 'inner';
+        let cleanText = block.replace(/^(S\d+(?:[^\:]*?)\:|CTA\:)/i, '').trim();
+        
+        if (block.match(/^S1\:/i)) layout = 'cover';
+        else if (block.match(/^S\d+\s*\(adat/i)) layout = 'stat';
+        else if (block.match(/^CTA\:/i)) layout = 'cta';
+
+        const lines = cleanText.split('\n').map(l => l.trim()).filter(Boolean);
+        let titleVal = lines[0] || (layout === 'cover' ? 'Szerkeszd át a Főcímet' : 'DIACÍM');
+        let bodyVal = lines.length > 1 ? lines.slice(1).join('\n') : cleanText;
+        let hookVal = '';
+
+        if (layout === 'cover') {
+          hookVal = titleVal.split(' ').pop().toLowerCase();
+        } else if (layout === 'stat') {
+          const nums = cleanText.match(/[-+]?\d[\d.,]*/g);
+          hookVal = nums ? nums[0] : '-500 kcal';
+        }
+        
+        const slideId = Date.now() + index;
+        slideDeck.push({
+          id: slideId,
+          layout: layout,
+          type: layout,
+          badge: layout === 'cover' ? '' : (layout === 'cta' ? 'KÖVESS MINKET' : `0${index + 1}. SLIDE`),
+          title: titleVal,
+          headline: titleVal.toUpperCase(),
+          hookWord: hookVal,
+          body: bodyVal,
+          icon: layout === 'cover' ? 'flame' : (layout === 'stat' ? 'target' : (layout === 'cta' ? 'check' : 'book')),
+          offsetY: 0,
+          contentWidth: 888
+        });
+      });
+
+      activeSlideIndex = 0;
+      renderUI(); // Rebuild the entire interface
+    }
+
+    // 3. Attach Event Listener (CRITICAL)
+    document.getElementById('generateAiBtn').addEventListener('click', parseAIBox);
+
+    // 4. The Render Function
+    function renderUI() {
+      renderSlideTabs();
+      updatePreview(); // Apply CSS & Colors & Lucide icons
+    }
+
+    // Icon SVG helper matching brand identity (64x64, drop-shadow)
+    function getIconSvg(iconName, accentColor) {
+      if (!iconName || iconName === 'none') return '';
+      const color = accentColor || '#E6C15A';
+      const styleAttr = `class="icon-box"`;
+
+      const icons = {
+        flame: `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${styleAttr}><path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z"/></svg>`,
+        target: `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${styleAttr}><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>`,
+        brain: `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${styleAttr}><path d="M12 5a3 3 0 1 0-5.997.125 4 4 0 0 0-2.526 5.77 4 4 0 0 0 .556 6.588A4 4 0 1 0 12 18Z"/><path d="M12 5a3 3 0 1 1 5.997.125 4 4 0 0 1 2.526 5.77 4 4 0 0 1-.556 6.588A4 4 0 1 1 12 18Z"/><path d="M12 5v13"/></svg>`,
+        book: `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${styleAttr}><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1-0.5-5Z"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>`,
+        check: `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${styleAttr}><path d="M20 6 9 17l-5-5"/></svg>`,
+        alert: `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" ${styleAttr}><circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/></svg>`
+      };
+      return icons[iconName] || `<i data-lucide="${iconName}" ${styleAttr}></i>`;
+    }
+
+    // Helper: Minimalist Swipe Arrow SVG for content slides (positioned lower at bottom 15%)
+    function getSwipeArrowSvg(slideType, accentColor) {
+      if (slideType === 'cover' || slideType === 'cta') return '';
+      const color = accentColor || '#E6C15A';
+      return `
+        <div class="swipe-arrow" style="position: absolute; right: 40px; bottom: 15%; color: var(--accent); opacity: 0.6; z-index: 10;">
+          <svg width="40" height="60" viewBox="0 0 24 40" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="8 12 16 20 8 28"></polyline>
+          </svg>
+        </div>
+      `;
+    }
+
+    // UI Render: Slide Tabs & Active Editor with Click-to-Scroll Sync
+    function renderSlideTabs() {
+      const slideList = document.getElementById('slideList');
+      document.getElementById('deckCountLabel').innerText = `${slideDeck.length} Slide`;
+
+      slideList.innerHTML = slideDeck.map((slide, idx) => {
+        const layoutType = slide.layout || slide.type || 'inner';
+        return `
+          <button data-idx="${idx}" class="px-3.5 py-1.5 rounded-lg text-xs font-mono transition flex items-center space-x-1.5 ${idx === activeSlideIndex ? 'bg-gold text-obsidian font-bold shadow-md' : 'bg-cardbg text-grey border border-gray-800 hover:text-bone'}">
+            <span>${idx + 1}. ${layoutType.toUpperCase()}</span>
+          </button>
+        `;
+      }).join('');
+
+      // Populate Editor Fields with active slide
+      const current = slideDeck[activeSlideIndex] || slideDeck[0];
+      if (current) {
+        document.getElementById('editorTitle').innerText = `Szerkesztés: ${activeSlideIndex + 1}. Slide`;
+        document.getElementById('slideType').value = current.layout || current.type || 'cover';
+        document.getElementById('slideIcon').value = current.icon || 'none';
+        document.getElementById('slideBadge').value = current.badge || '';
+        document.getElementById('slideHeadline').value = current.title || current.headline || '';
+        document.getElementById('slideHookWord').value = current.hookWord || '';
+        document.getElementById('slideBody').value = current.body || '';
+        document.getElementById('slideOffsetY').value = current.offsetY || 0;
+        document.getElementById('slideContentWidth').value = current.contentWidth || 888;
+        
+        document.getElementById('offsetYVal').innerText = `${current.offsetY || 0}px`;
+        document.getElementById('contentWidthVal').innerText = `${current.contentWidth || 888}px`;
+      }
+    }
+
+    // Select Slide and Smoothly Scroll Preview into View
+    function selectSlide(idx) {
+      activeSlideIndex = idx;
+      renderSlideTabs();
+      updatePreview();
+      requestAnimationFrame(() => {
+        const currentSlideObj = slideDeck[idx];
+        const targetId = currentSlideObj && currentSlideObj.id ? `preview-slide-${currentSlideObj.id}` : `preview-slide-idx-${idx}`;
+        const targetEl = document.getElementById(targetId);
+        if (targetEl) {
+          targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+      });
+    }
+
+    // Form Event Sync to Active Slide
+    function syncActiveSlideFromForm() {
+      if (!slideDeck[activeSlideIndex]) return;
+      const cur = slideDeck[activeSlideIndex];
+      const newLayout = document.getElementById('slideType').value;
+      cur.layout = newLayout;
+      cur.type = newLayout;
+      cur.icon = document.getElementById('slideIcon').value;
+      cur.badge = document.getElementById('slideBadge').value;
+      cur.title = document.getElementById('slideHeadline').value;
+      cur.headline = document.getElementById('slideHeadline').value;
+      cur.hookWord = document.getElementById('slideHookWord').value.toLowerCase();
+      cur.body = document.getElementById('slideBody').value;
+      cur.offsetY = parseInt(document.getElementById('slideOffsetY').value, 10) || 0;
+      cur.contentWidth = parseInt(document.getElementById('slideContentWidth').value, 10) || 888;
+
+      document.getElementById('offsetYVal').innerText = `${cur.offsetY}px`;
+      document.getElementById('contentWidthVal').innerText = `${cur.contentWidth}px`;
+
+      const logoSize = document.getElementById('logoSize').value;
+      const globalTitleSize = document.getElementById('globalTitleSize').value;
+      const globalBodySize = document.getElementById('globalBodySize').value;
+
+      document.getElementById('logoSizeVal').innerText = `${logoSize}px`;
+      document.getElementById('titleSizeVal').innerText = `${globalTitleSize}px`;
+      document.getElementById('bodySizeVal').innerText = `${globalBodySize}px`;
+
+      savePreferences();
+    }
+
+    // Add & Delete Slide Actions
+    document.getElementById('slideList').addEventListener('click', (e) => {
+      const btn = e.target.closest('button');
+      if (!btn || !btn.dataset.idx) return;
+      selectSlide(parseInt(btn.dataset.idx, 10));
+    });
+
+    document.getElementById('addSlideBtn').addEventListener('click', () => {
+      const newId = Date.now();
+      slideDeck.push({
+        id: newId,
+        layout: 'inner',
+        type: 'inner',
+        badge: `0${slideDeck.length + 1}. FEJEZET`,
+        title: 'ÚJ SLIDE FŐCÍM',
+        headline: 'ÚJ SLIDE FŐCÍM',
+        hookWord: '',
+        body: 'A diához kapcsolódó kifejtő tartalom szövege...',
+        icon: 'book',
+        offsetY: 0,
+        contentWidth: 888
+      });
+      activeSlideIndex = slideDeck.length - 1;
+      renderUI();
+      selectSlide(activeSlideIndex);
+    });
+
+    document.getElementById('deleteSlideBtn').addEventListener('click', () => {
+      if (slideDeck.length <= 1) {
+        alert('A deck legalább 1 slide-ot tartalmaznia kell!');
+        return;
+      }
+      slideDeck.splice(activeSlideIndex, 1);
+      activeSlideIndex = Math.max(0, activeSlideIndex - 1);
+      renderUI();
+    });
+
+    // 5. Finalize UI Update Function with Unique IDs for Scroll Sync
+    function updatePreview() {
+      // syncActiveSlideFromForm(); // Debounced outside
+      const multiSlidePreview = document.getElementById('multiSlidePreview');
+
+      const canvasFormat = document.getElementById('canvasFormat').value;
+      const nicheColor = document.getElementById('nicheSelect').value;
+      const bgColor = document.getElementById('bgColor').value;
+      const accentColor = document.getElementById('accentColor').value;
+      const showLogo = document.getElementById('showLogo').checked;
+      const logoSize = document.getElementById('logoSize').value;
+
+      // Strictly Requested Font Size Sliders from Floating Design Palette
+      const globalTitleSize = document.getElementById('globalTitleSize').value || 60;
+      const globalBodySize = document.getElementById('globalBodySize').value || 26;
+
+      let dimensions = { w: 1080, h: 1350, scale: 0.45 };
+      if (canvasFormat === 'story') {
+        dimensions = { w: 1080, h: 1920, scale: 0.35 };
+      } else if (canvasFormat === 'pdf') {
+        dimensions = { w: 1240, h: 1754, scale: 0.35 };
+      }
+
+      multiSlidePreview.innerHTML = slideDeck.map((slide, idx) => {
+        const slideType = slide.layout || slide.type || 'cover';
+        const isCover = slideType === 'cover';
+        const watermarkNum = isCover ? '' : String(idx + 1);
+        const iconSvg = getIconSvg(slide.icon, accentColor);
+        const swipeArrowSvg = getSwipeArrowSvg(slideType, accentColor);
+        const isSelected = idx === activeSlideIndex;
+        const slideTitle = slide.title || slide.headline || '';
+        const elemId = slide.id ? `preview-slide-${slide.id}` : `preview-slide-idx-${idx}`;
+
+        let contentBlock = '';
+        switch (slideType) {
+          case 'cta':
+            contentBlock = `
+              <div class="title-main" >${slideTitle}</div>
+              <div class="body-text" style="margin-top: 20px;">${slide.body}</div>
+              <div class="ig-action-bar" >
+                <div>[ ♥ LIKE ]</div>
+                <div>[ 💬 COMMENT ]</div>
+                <div>[ ✈ SHARE ]</div>
+                <div>[ 💾 SAVE ]</div>
+              </div>
+            `;
+            break;
+
+          case 'inner':
+            contentBlock = `
+              <div class="body-text" style="font-family: 'Archivo', sans-serif; color: #E8DFC9; text-transform: uppercase; margin-bottom: 20px; font-size: var(--title-size);">${slideTitle}</div>
+              <div class="body-text" >${slide.body}</div>
+            `;
+            break;
+
+          case 'myth':
+            contentBlock = `
+              <div style="background: rgba(110, 36, 51, 0.15); border: 1px solid rgba(110, 36, 51, 0.5); padding: 32px; border-radius: 12px; margin-bottom: 20px;">
+                <div style="font-family: 'IBM Plex Mono', monospace; color: #FF54A6; font-weight: 600; margin-bottom: 12px; font-size: 18px; letter-spacing: 1.5px;">TÉVHIT / MÍTOSZ</div>
+                <div class="body-text" style="font-size: var(--title-size);">${slideTitle}</div>
+              </div>
+              <div style="background: rgba(37, 230, 122, 0.08); border: 1px solid rgba(37, 230, 122, 0.4); padding: 32px; border-radius: 12px;">
+                <div style="font-family: 'IBM Plex Mono', monospace; color: #25E67A; font-weight: 600; margin-bottom: 12px; font-size: 18px; letter-spacing: 1.5px;">VALÓSÁG / TUDOMÁNY</div>
+                <div class="body-text" >${slide.body}</div>
+              </div>
+            `;
+            break;
+
+          case 'stat':
+            contentBlock = `
+              <div class="body-text" style="font-family: 'Archivo', sans-serif; font-size: var(--title-size); font-weight: 800; color: #E8DFC9; text-transform: uppercase;">${slideTitle}</div>
+              <div style="font-family: 'Archivo', sans-serif; font-size: 110px; font-weight: 900; color: var(--accent); line-height: 1; margin: 20px 0;">${slide.hookWord}</div>
+              <div class="body-text" >${slide.body}</div>
+            `;
+            break;
+
+          case 'cover':
+          default:
+            contentBlock = `
+              <div class="title-main" style="font-size: var(--title-size);">${slideTitle}</div>
+              <div class="hook-word">${slide.hookWord}</div>
+              <div class="body-text" >${slide.body}</div>
+            `;
+            break;
+        }
+
+        return `
+          <div id="${elemId}" class=" transition flex flex-col items-center">
+            <div class="text-xs font-mono mb-1 ${isSelected ? 'text-gold font-bold' : 'text-grey'}">${idx + 1}. Slide (${slideType.toUpperCase()})</div>
+            <div style="width: ${dimensions.w}px; height: ${dimensions.h}px; transform: scale(${dimensions.scale}); transform-origin: top center; background-color: ${bgColor}; font-family: 'Inter', sans-serif; position: relative; --title-size: ${globalTitleSize}px; --body-size: ${globalBodySize}px; --logo-size: ${logoSize}px; --accent: ${accentColor};" class="shadow-2xl rounded-lg ${isSelected ? 'ring-4 ring-gold' : 'ring-1 ring-gray-800'}">
+              <div class="slide-container" style="width: ${dimensions.w}px; height: ${dimensions.h}px; background: radial-gradient(circle at 50% 20%, #16191c 0%, ${bgColor} 80%);">
+                <div class="ambient-glow" style="background: ${nicheColor};"></div>
+                <div class="bg-watermark-number">${watermarkNum}</div>
+                ${swipeArrowSvg}
+                
+                <div class="top-logo-row">
+                  <img src="/assets/brand/fit_biblia_logo_transparent_alt.png" class="brand-logo-img" style="display: ${showLogo ? 'block' : 'none'};" alt="FIT BIBLIA" />
+                </div>
+
+                <div class="content-area" style="padding-top: ${slide.offsetY || 0}px; max-width: ${slide.contentWidth || 888}px;">
+                  ${iconSvg}
+                  ${contentBlock}
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      // AT THE VERY END, INITIALIZE ICONS (CRITICAL)
+      if (typeof lucide !== 'undefined') {
+        lucide.createIcons();
+      }
+    }
+
+    function debounce(func, wait) {
+      let timeout;
+      return function(...args) {
+        clearTimeout(timeout);
+        timeout = setTimeout(() => func.apply(this, args), wait);
+      };
+    }
+
+    const debouncedUpdatePreview = debounce(() => {
+      syncActiveSlideFromForm();
+      updatePreview();
+    }, 150);
+
+    
+    // --- Project Management Logic ---
+    async function fetchProjects() {
+      try {
+        const res = await fetch('/api/projects');
+        const data = await res.json();
+        const select = document.getElementById('projectSelect');
+        select.innerHTML = '<option value="">Válassz projektet...</option>';
+        if (data.projects) {
+          data.projects.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = p.name;
+            select.appendChild(opt);
+          });
+        }
+      } catch (err) {
+        console.error('Failed to load projects', err);
+      }
+    }
+
+    document.getElementById('saveProjectBtn').addEventListener('click', async () => {
+      const name = document.getElementById('projectName').value.trim();
+      if (!name) return alert('Kérlek add meg a projekt nevét!');
+      
+      syncActiveSlideFromForm();
+      const btn = document.getElementById('saveProjectBtn');
+      btn.textContent = '...';
+      
+      try {
+        const res = await fetch('/api/projects', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, deck: slideDeck })
+        });
+        if (res.ok) {
+          document.getElementById('projectName').value = '';
+          alert('Projekt sikeresen mentve!');
+          await fetchProjects();
+        } else {
+          alert('Hiba a mentés során.');
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Hiba a mentés során.');
+      } finally {
+        btn.textContent = 'Mentés';
+      }
+    });
+
+    document.getElementById('projectSelect').addEventListener('change', async (e) => {
+      const id = e.target.value;
+      if (!id) return;
+      try {
+        const res = await fetch(`/api/projects/${id}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.deck && Array.isArray(data.deck)) {
+            slideDeck = data.deck;
+            activeSlideIndex = 0;
+            renderUI();
+            selectSlide(0);
+            updatePreview();
+            alert('Projekt betöltve!');
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load project details', err);
+      }
+    });
+    // --------------------------------
+
+    // Form Change Listeners for Instant Live Updating
+    document.querySelectorAll('input, select, textarea').forEach(el => {
+      el.addEventListener('input', debouncedUpdatePreview);
+      el.addEventListener('change', debouncedUpdatePreview);
+    });
+
+    // Generate All Slides & Compiled PDF Endpoint Handler
+    document.getElementById('generateBtn').addEventListener('click', async () => {
+      const btn = document.getElementById('generateBtn');
+      const spinner = document.getElementById('spinner');
+      const btnText = document.getElementById('btnText');
+
+      syncActiveSlideFromForm();
+
+      btn.disabled = true;
+      spinner.classList.remove('hidden');
+      btnText.innerText = 'ÖSSZES SLIDE EXPORTÁLÁSA (ZIP)...';
+
+      try {
+        const payload = {
+          format: document.getElementById('canvasFormat').value,
+          nicheColor: document.getElementById('nicheSelect').value,
+          bgColor: document.getElementById('bgColor').value,
+          accentColor: document.getElementById('accentColor').value,
+          showLogo: document.getElementById('showLogo').checked,
+          logoSize: document.getElementById('logoSize').value,
+          titleSize: document.getElementById('globalTitleSize').value,
+          bodySize: document.getElementById('globalBodySize').value,
+          slides: slideDeck
+        };
+
+        const response = await fetch('/api/export-batch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error('Szerveroldali renderelési hiba');
+        }
+
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `fit_biblia_studio_pro_${Date.now()}.zip`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(url);
+
+      } catch (err) {
+        alert('Generálás sikertelen: ' + err.message);
+      } finally {
+        btn.disabled = false;
+        spinner.classList.add('hidden');
+        btnText.innerText = 'ÖSSZES SLIDE EXPORTÁLÁSA (ZIP)';
+      }
+    });
+
+    // Initial Load
+    loadPreferences();
+    fetchProjects();
+    renderUI();
+  </script>
+</body>
+</html>
