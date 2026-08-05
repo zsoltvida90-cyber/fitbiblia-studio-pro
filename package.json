@@ -1,19 +1,24 @@
 {
-    "name":  "fit-biblia-engine",
-    "version":  "1.0.0",
-    "description":  "Fit Biblia Web-Based Document \u0026 Slide Generator Application",
-    "main":  "server.js",
-    "type":  "module",
-    "scripts":  {
-                    "start":  "node server.js",
-                    "render":  "node src/render_engine.js"
-                },
-    "dependencies":  {
-                         "archiver":  "^8.0.0",
-                         "cors":  "^2.8.6",
-                         "express":  "^4.22.2",
-                         "pdf-lib":  "^1.17.1",
-                         "puppeteer":  "^24.1.0",
-                         "sqlite3":  "^6.0.1"
-                     }
+    "name": "fit-biblia-engine",
+    "version": "1.0.0",
+    "description": "Fit Biblia Web-Based Document & Slide Generator Application",
+    "main": "server.js",
+    "type": "module",
+    "scripts": {
+        "start": "node server.js",
+        "render": "node src/render_engine.js"
+    },
+    "dependencies": {
+        "@google/genai": "^2.15.0",
+        "archiver": "^7.0.0",
+        "cors": "^2.8.6",
+        "diff": "^9.0.0",
+        "dotenv": "^17.4.2",
+        "express": "^4.22.2",
+        "multer": "^2.2.0",
+        "pdf-lib": "^1.17.1",
+        "pdf-parse": "^2.4.5",
+        "puppeteer": "^24.1.0",
+        "sqlite3": "^6.0.1"
+    }
 }

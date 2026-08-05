@@ -5,9 +5,18 @@ import fs from 'fs';
 import puppeteer from 'puppeteer';
 import { PDFDocument } from 'pdf-lib';
 import sqlite3 from 'sqlite3';
+import dotenv from 'dotenv';
+dotenv.config();
+import { GoogleGenAI } from '@google/genai';
+import multer from 'multer';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const archiver = require('archiver');
+const pdfParse = require('pdf-parse');
+import { launchBrowser, buildSelfContainedDocument, mapWebSlideToEngine } from './src/render_page.js';
+
+// Initialize Google Gemini AI client
+const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
 const dbPath = path.resolve('projects.db');
 const db = new sqlite3.Database(dbPath, (err) => {
@@ -30,6 +39,47 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static(path.resolve('public')));
 app.use('/assets', express.static(path.resolve('assets')));
+
+// Helper: Strict JSON Validation & Normalization for slide decks
+function validateSlideDeck(deck) {
+  if (!Array.isArray(deck)) return [];
+  
+  return deck.map((slide, index) => {
+    // Ensure slide is an object
+    if (!slide || typeof slide !== 'object') slide = {};
+
+    // Validate type
+    const validTypes = ['cover', 'inner', 'myth', 'stat', 'cta'];
+    let type = slide.type || slide.slideType;
+    if (!validTypes.includes(type)) type = 'cover';
+
+    // Normalize and fallback string fields
+    const headline = typeof slide.headline === 'string' ? slide.headline : (typeof slide.title === 'string' ? slide.title : 'A FOGYÁS TÖRVÉNYE');
+    const badge = typeof slide.badge === 'string' ? slide.badge : (typeof slide.headerLeft === 'string' ? slide.headerLeft : '');
+    const hookWord = typeof slide.hookWord === 'string' ? slide.hookWord : (typeof slide.hook === 'string' ? slide.hook : '');
+    const icon = typeof slide.icon === 'string' ? slide.icon : 'none';
+    
+    let body = '';
+    if (typeof slide.body === 'string') {
+      body = slide.body;
+    } else if (Array.isArray(slide.body)) {
+      body = slide.body.map(b => typeof b === 'string' ? b : (b.text || '')).join('');
+    }
+
+    return {
+      type,
+      badge,
+      headline,
+      hookWord,
+      body,
+      icon,
+      offsetY: typeof slide.offsetY === 'number' ? slide.offsetY : 0,
+      contentWidth: typeof slide.contentWidth === 'number' ? slide.contentWidth : 888,
+      titleSize: slide.titleSize,
+      bodySize: slide.bodySize
+    };
+  });
+}
 
 // Helper: Format dimensions map
 function getCanvasDimensions(canvasFormat) {
@@ -75,56 +125,123 @@ function getSwipeArrowHtml(slideType, accentColor) {
   `;
 }
 
-// API Route: POST /api/parse-ai (Real AI Integration Shell)
-app.post('/api/parse-ai', (req, res) => {
+// Helper: Render Slide to Image
+async function renderSlideToImage(page, slide, config, index, tempDir) {
+  const { dimensions, timestamp } = config;
+  
+  // 1. Map generic web UI slide to the powerful Obszidián engine format
+  const engineSlide = mapWebSlideToEngine(slide);
+  
+  // 2. Build the self-contained HTML (all fonts + CSS inlined)
+  const injectedHtml = buildSelfContainedDocument(engineSlide, {
+    docTitle: 'FIT BIBLIA',
+    pageIndex: index + 1,
+    totalPages: 10 // Approximation, could be config.totalPages
+  });
+
+  // 3. Load it into the headless browser
+  await page.setContent(injectedHtml, { waitUntil: 'load' });
+  await page.evaluateHandle(() => document.fonts.ready);
+  await page.evaluateHandle(() => Promise.all(Array.from(document.images).filter(img => !img.complete).map(img => new Promise(resolve => { img.onload = img.onerror = resolve; }))));
+
+  // Dynamic typography scaling: shrink sizes if content overflows
+  await page.evaluate(() => {
+    const container = document.querySelector('.slide-container');
+    const contentArea = document.querySelector('.content-area');
+    if (!container || !contentArea) return;
+
+    let maxLoops = 25;
+    while (container.scrollHeight > container.clientHeight && maxLoops > 0) {
+      let currentTitle = parseInt(getComputedStyle(container).getPropertyValue('--title-size'));
+      let currentBody = parseInt(getComputedStyle(container).getPropertyValue('--body-size'));
+      
+      let scaled = false;
+      if (currentTitle > 30) {
+        container.style.setProperty('--title-size', (currentTitle - 2) + 'px');
+        scaled = true;
+      }
+      if (currentBody > 18) {
+        container.style.setProperty('--body-size', (currentBody - 1) + 'px');
+        scaled = true;
+      }
+      
+      if (!scaled) break; // Cannot shrink further
+      maxLoops--;
+    }
+  });
+
+  const slidePngPath = path.join(tempDir, `slide_${index}_${timestamp}.png`);
+  await page.screenshot({ path: slidePngPath, clip: { x: 0, y: 0, width: dimensions.width, height: dimensions.height } });
+  
+  return slidePngPath;
+}
+
+
+const upload = multer({ dest: 'temp_web/uploads/' });
+
+// API Route: POST /api/parse-pdf (Server-side PDF Extraction)
+app.post('/api/parse-pdf', upload.single('pdf'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'Nincs PDF fájl feltöltve.' });
+    }
+
+    const dataBuffer = fs.readFileSync(req.file.path);
+    const pdfData = await pdfParse(dataBuffer);
+    const extractedText = pdfData.text;
+
+    // Clean up uploaded file
+    fs.unlinkSync(req.file.path);
+
+    if (!extractedText || extractedText.trim() === '') {
+      return res.status(400).json({ error: 'Nem sikerült szöveget kinyerni a PDF-ből.' });
+    }
+
+    res.json({ text: extractedText });
+
+  } catch (err) {
+    console.error('PDF parsing error:', err);
+    res.status(500).json({ error: 'Hiba a PDF feldolgozása során' });
+  }
+});
+
+// API Route: POST /api/parse-ai (Google Gemini Integration)
+app.post('/api/parse-ai', async (req, res) => {
   try {
     const { text } = req.body;
     
-    // AI Mock response returning strict JSON array representing parsed slides
-    const mockSlides = [
-      {
-        type: 'cover',
-        badge: '',
-        headline: 'A FOGYÁS TÖRVÉNYE',
-        hookWord: 'törvénye',
-        body: 'A zsírégetés alaptörvénye a tartós kalóriadeficit. A szervezet kizárólag hiány esetén bont zsírt.',
-        icon: 'flame',
-        offsetY: 0,
-        contentWidth: 888
-      },
-      {
-        type: 'inner',
-        badge: '01. FEJEZET',
-        headline: 'Energiamérleg Szabálya',
-        hookWord: '',
-        body: 'Az energiaegyenleg szabályozza a testtömeg változását. Függetlenül a diéta típusától, a zsírégetés alaptörvénye a tartós kalóriadeficit.',
-        icon: 'book',
-        offsetY: 0,
-        contentWidth: 888
-      },
-      {
-        type: 'stat',
-        badge: '02. STATISZTIKA',
-        headline: 'OPTIMÁLIS DEFICIT',
-        hookWord: '-500 kcal',
-        body: 'A fenntartható zsívesztés tudományosan igazolt aranyszabálya.',
-        icon: 'target',
-        offsetY: 0,
-        contentWidth: 888
-      },
-      {
-        type: 'cta',
-        badge: 'KÖVESS MINKET',
-        headline: 'MENTS EL EZT A POSZTOT',
-        hookWord: '',
-        body: 'Napi bizonyíték-alapú fitnesz és táplálkozási tartalmak a profilon található linken.',
-        icon: 'check',
-        offsetY: 0,
-        contentWidth: 888
-      }
-    ];
+    if (!process.env.GEMINI_API_KEY || process.env.GEMINI_API_KEY === 'ide_masold_be_a_kulcsot') {
+      return res.status(400).json({ error: 'Nincs beállítva a GEMINI_API_KEY a .env fájlban!' });
+    }
 
-    res.json({ slides: mockSlides });
+    const systemPrompt = `
+      You are an expert copywriter and content strategist for a fitness brand.
+      Extract the provided text into a JSON array of slide objects.
+      Each object MUST have the following properties:
+      - type: "cover", "inner", "stat", "myth", or "cta".
+      - badge: Short uppercase text (e.g., "01. FEJEZET").
+      - headline: Main title (e.g., "Energiamérleg Szabálya").
+      - hookWord: One or two short words for visual emphasis (e.g., "-500 kcal").
+      - body: The main body paragraph.
+      - icon: "flame", "target", "brain", "book", "check", or "alert".
+      Return ONLY valid JSON wrapped in { "slides": [ ... ] }.
+    `;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [
+        { role: 'user', parts: [{ text: systemPrompt + '\n\n' + text }] }
+      ],
+      config: {
+        responseMimeType: 'application/json',
+        temperature: 0.7
+      }
+    });
+
+    const parsedResponse = JSON.parse(response.text);
+    const validatedSlides = validateSlideDeck(parsedResponse.slides || []);
+
+    res.json({ slides: validatedSlides });
   } catch (err) {
     console.error('AI Parsing error:', err);
     res.status(500).json({ error: 'AI feldolgozás sikertelen' });
@@ -230,7 +347,7 @@ app.post('/api/generate', async (req, res) => {
   try {
     const { format, slides, slide, nicheColor, bgColor, accentColor, showLogo, logoSize: rawLogoSize, titleSize: rawTitleSize, bodySize: rawBodySize } = req.body;
     
-    const slideDeck = Array.isArray(slides) ? slides : [slide || req.body];
+    const slideDeck = validateSlideDeck(Array.isArray(slides) ? slides : [slide || req.body]);
     const canvasFormat = format || 'carousel';
     const dimensions = getCanvasDimensions(canvasFormat);
 
@@ -259,115 +376,18 @@ app.post('/api/generate', async (req, res) => {
     const baseTemplatePath = path.resolve('templates/base_render.html');
     const templateStr = fs.readFileSync(baseTemplatePath, 'utf-8');
 
-      browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--allow-file-access-from-files']
-      });
+    browser = await launchBrowser();
 
-      page = await browser.newPage();
-      await page.setViewport({ width: dimensions.width, height: dimensions.height, deviceScaleFactor: 2 });
+    page = await browser.newPage();
+    await page.setViewport({ width: dimensions.width, height: dimensions.height, deviceScaleFactor: 2 });
 
-      const pdfDoc = await PDFDocument.create();
-      const timestamp = Date.now();
+    const pdfDoc = await PDFDocument.create();
+    const timestamp = Date.now();
+
+    const config = { dimensions, customBg, customAccent, displayLogo, logoSize, globalTitleSize, globalBodySize, ambientColor, templateStr, timestamp };
 
     for (let i = 0; i < slideDeck.length; i++) {
-      const currentSlide = slideDeck[i];
-      const slideType = currentSlide.type || currentSlide.slideType || 'cover';
-      const badgeVal = (currentSlide.badge || currentSlide.headerLeft || '').trim();
-      const titleVal = currentSlide.headline || currentSlide.title || 'A FOGYÁS TÖRVÉNYE';
-      const hookVal = (currentSlide.hookWord || currentSlide.hook || '').toLowerCase();
-      const bodyVal = typeof currentSlide.body === 'string' ? currentSlide.body : (Array.isArray(currentSlide.body) ? currentSlide.body.map(b => b.text || '').join('') : '');
-      const iconHtml = getIconHtml(currentSlide.icon, customAccent);
-      const swipeArrowHtml = getSwipeArrowHtml(slideType, customAccent);
-      const titleSize = currentSlide.titleSize || globalTitleSize;
-      const bodySize = currentSlide.bodySize || globalBodySize;
-      const offsetY = parseInt(currentSlide.offsetY || 0, 10);
-      const contentWidth = parseInt(currentSlide.contentWidth || 888, 10);
-
-      // Optional Badge HTML
-      const badgeHtml = badgeVal ? `<div class="badge-clean">${badgeVal}</div>` : `<div></div>`;
-
-      // 3D Background Watermark Pagination Number (empty for cover, 2, 3, 4 for others)
-      const watermarkNum = (slideType === 'cover') ? '' : String(i + 1);
-
-      // Construct Content Block with dynamic typography scaling
-      let contentBlock = '';
-      switch (slideType) {
-        case 'cta':
-          contentBlock = `
-            <div class="title-main" >${titleVal}</div>
-            <div class="body-text" style="margin-top: 20px;">${bodyVal}</div>
-            <div class="ig-action-bar">
-              <div>[ ♥ LIKE ]</div>
-              <div>[ 💬 COMMENT ]</div>
-              <div>[ ✈ SHARE ]</div>
-              <div>[ 💾 SAVE ]</div>
-            </div>
-          `;
-          break;
-
-        case 'inner':
-          contentBlock = `
-            <div class="body-text" style="font-family: 'Archivo', sans-serif; color: #E8DFC9; text-transform: uppercase; margin-bottom: 20px; font-size: var(--title-size);">${titleVal}</div>
-            <div class="body-text" >${bodyVal}</div>
-          `;
-          break;
-
-        case 'myth':
-          contentBlock = `
-            <div style="background: rgba(110, 36, 51, 0.15); border: 1px solid rgba(110, 36, 51, 0.5); padding: 32px; border-radius: 12px; margin-bottom: 20px;">
-              <div style="font-family: 'IBM Plex Mono', monospace; color: #FF54A6; font-weight: 600; margin-bottom: 12px; font-size: 18px; letter-spacing: 1.5px;">TÉVHIT / MÍTOSZ</div>
-              <div class="body-text" style="font-size: var(--title-size);">${titleVal}</div>
-            </div>
-            <div style="background: rgba(37, 230, 122, 0.08); border: 1px solid rgba(37, 230, 122, 0.4); padding: 32px; border-radius: 12px;">
-              <div style="font-family: 'IBM Plex Mono', monospace; color: #25E67A; font-weight: 600; margin-bottom: 12px; font-size: 18px; letter-spacing: 1.5px;">VALÓSÁG / TUDOMÁNY</div>
-              <div class="body-text" >${bodyVal}</div>
-            </div>
-          `;
-          break;
-
-        case 'stat':
-          contentBlock = `
-            <div class="body-text" style="font-family: 'Archivo', sans-serif; font-size: var(--title-size); font-weight: 800; color: #E8DFC9; text-transform: uppercase;">${titleVal}</div>
-            <div style="font-family: 'Archivo', sans-serif; font-size: 110px; font-weight: 900; color: var(--accent); line-height: 1; margin: 20px 0;">${hookVal}</div>
-            <div class="body-text" >${bodyVal}</div>
-          `;
-          break;
-
-        case 'cover':
-        default:
-          contentBlock = `
-            <div class="title-main" style="font-size: var(--title-size);">${titleVal}</div>
-            <div class="hook-word">${hookVal}</div>
-            <div class="body-text" >${bodyVal}</div>
-          `;
-          break;
-      }
-
-      const injectedHtml = templateStr
-        .replace(/\{\{WIDTH\}\}/g, dimensions.width)
-        .replace(/\{\{HEIGHT\}\}/g, dimensions.height)
-        .replace(/\{\{BADGE_HTML\}\}/g, badgeHtml)
-        .replace(/\{\{WATERMARK_NUMBER\}\}/g, watermarkNum)
-        .replace(/\{\{SWIPE_ARROW_HTML\}\}/g, swipeArrowHtml)
-        .replace(/\{\{BG_COLOR\}\}/g, customBg)
-        .replace(/\{\{ACCENT_COLOR\}\}/g, customAccent)
-        .replace(/\{\{LOGO_DISPLAY\}\}/g, displayLogo)
-        .replace(/\{\{LOGO_SIZE\}\}/g, logoSize)
-        .replace(/\{\{NICHE_COLOR\}\}/g, ambientColor)
-        .replace(/\{\{OFFSET_Y\}\}/g, offsetY)
-        .replace(/\{\{CONTENT_WIDTH\}\}/g, contentWidth)
-        .replace(/\{\{TITLE_SIZE\}\}/g, titleSize)
-        .replace(/\{\{BODY_SIZE\}\}/g, bodySize)
-        .replace(/\{\{ICON_HTML\}\}/g, iconHtml)
-        .replace(/\{\{CONTENT_BLOCK\}\}/g, contentBlock);
-
-      await page.setContent(injectedHtml, { waitUntil: 'networkidle0', url: 'http://localhost:3000' });
-      await page.evaluateHandle(() => document.fonts.ready); // CRITICAL: Wait for Google Fonts!
-      await page.evaluateHandle(() => Promise.all(Array.from(document.images).filter(img => !img.complete).map(img => new Promise(resolve => { img.onload = img.onerror = resolve; }))));
-
-      const slidePngPath = path.join(tempDir, `slide_${i}_${timestamp}.png`);
-      await page.screenshot({ path: slidePngPath, clip: { x: 0, y: 0, width: dimensions.width, height: dimensions.height } });
+      const slidePngPath = await renderSlideToImage(page, slideDeck[i], config, i, tempDir);
 
       const pngBytes = fs.readFileSync(slidePngPath);
       const pngImage = await pdfDoc.embedPng(pngBytes);
@@ -404,7 +424,7 @@ app.post('/api/export-batch', async (req, res) => {
   try {
     const { format, slides, slide, nicheColor, bgColor, accentColor, showLogo, logoSize: rawLogoSize, titleSize: rawTitleSize, bodySize: rawBodySize } = req.body;
     
-    const slideDeck = Array.isArray(slides) ? slides : [slide || req.body];
+    const slideDeck = validateSlideDeck(Array.isArray(slides) ? slides : [slide || req.body]);
     const canvasFormat = format || 'carousel';
     const dimensions = getCanvasDimensions(canvasFormat);
 
@@ -433,13 +453,7 @@ app.post('/api/export-batch', async (req, res) => {
     const baseTemplatePath = path.resolve('templates/base_render.html');
     const templateStr = fs.readFileSync(baseTemplatePath, 'utf-8');
 
-    browser = await puppeteer.launch({
-      headless: true,
-      args: ['--no-sandbox', '--disable-setuid-sandbox', '--allow-file-access-from-files']
-    });
-
-    page = await browser.newPage();
-    await page.setViewport({ width: dimensions.width, height: dimensions.height, deviceScaleFactor: 2 });
+    browser = await launchBrowser();
 
     const timestamp = Date.now();
     const zipPath = path.join(tempDir, `export_deck_${timestamp}.zip`);
@@ -454,112 +468,45 @@ app.post('/api/export-batch', async (req, res) => {
 
     archive.pipe(output);
 
-    for (let i = 0; i < slideDeck.length; i++) {
-      const currentSlide = slideDeck[i];
-      const slideType = currentSlide.type || currentSlide.slideType || 'cover';
-      const badgeVal = (currentSlide.badge || currentSlide.headerLeft || '').trim();
-      const titleVal = currentSlide.headline || currentSlide.title || 'A FOGYÁS TÖRVÉNYE';
-      const hookVal = (currentSlide.hookWord || currentSlide.hook || '').toLowerCase();
-      const bodyVal = typeof currentSlide.body === 'string' ? currentSlide.body : (Array.isArray(currentSlide.body) ? currentSlide.body.map(b => b.text || '').join('') : '');
-      const iconHtml = getIconHtml(currentSlide.icon, customAccent);
-      const swipeArrowHtml = getSwipeArrowHtml(slideType, customAccent);
-      const titleSize = currentSlide.titleSize || globalTitleSize;
-      const bodySize = currentSlide.bodySize || globalBodySize;
-      const offsetY = parseInt(currentSlide.offsetY || 0, 10);
-      const contentWidth = parseInt(currentSlide.contentWidth || 888, 10);
+    const config = { dimensions, customBg, customAccent, displayLogo, logoSize, globalTitleSize, globalBodySize, ambientColor, templateStr, timestamp };
+    let generatedFiles = [];
 
-      const badgeHtml = badgeVal ? `<div class="badge-clean">${badgeVal}</div>` : `<div></div>`;
-      const watermarkNum = (slideType === 'cover') ? '' : String(i + 1);
-
-      let contentBlock = '';
-      switch (slideType) {
-        case 'cta':
-          contentBlock = `
-            <div class="title-main" >${titleVal}</div>
-            <div class="body-text" style="margin-top: 20px;">${bodyVal}</div>
-            <div class="ig-action-bar">
-              <div>[ ♥ LIKE ]</div>
-              <div>[ 💬 COMMENT ]</div>
-              <div>[ ✈ SHARE ]</div>
-              <div>[ 💾 SAVE ]</div>
-            </div>
-          `;
-          break;
-        case 'inner':
-          contentBlock = `
-            <div class="body-text" style="font-family: 'Archivo', sans-serif; color: #E8DFC9; text-transform: uppercase; margin-bottom: 20px; font-size: var(--title-size);">${titleVal}</div>
-            <div class="body-text" >${bodyVal}</div>
-          `;
-          break;
-        case 'myth':
-          contentBlock = `
-            <div style="background: rgba(110, 36, 51, 0.15); border: 1px solid rgba(110, 36, 51, 0.5); padding: 32px; border-radius: 12px; margin-bottom: 20px;">
-              <div style="font-family: 'IBM Plex Mono', monospace; color: #FF54A6; font-weight: 600; margin-bottom: 12px; font-size: 18px; letter-spacing: 1.5px;">TÉVHIT / MÍTOSZ</div>
-              <div class="body-text" style="font-size: var(--title-size);">${titleVal}</div>
-            </div>
-            <div style="background: rgba(37, 230, 122, 0.08); border: 1px solid rgba(37, 230, 122, 0.4); padding: 32px; border-radius: 12px;">
-              <div style="font-family: 'IBM Plex Mono', monospace; color: #25E67A; font-weight: 600; margin-bottom: 12px; font-size: 18px; letter-spacing: 1.5px;">VALÓSÁG / TUDOMÁNY</div>
-              <div class="body-text" >${bodyVal}</div>
-            </div>
-          `;
-          break;
-        case 'stat':
-          contentBlock = `
-            <div class="body-text" style="font-family: 'Archivo', sans-serif; font-size: var(--title-size); font-weight: 800; color: #E8DFC9; text-transform: uppercase;">${titleVal}</div>
-            <div style="font-family: 'Archivo', sans-serif; font-size: 110px; font-weight: 900; color: var(--accent); line-height: 1; margin: 20px 0;">${hookVal}</div>
-            <div class="body-text" >${bodyVal}</div>
-          `;
-          break;
-        case 'cover':
-        default:
-          contentBlock = `
-            <div class="title-main" style="font-size: var(--title-size);">${titleVal}</div>
-            <div class="hook-word">${hookVal}</div>
-            <div class="body-text" >${bodyVal}</div>
-          `;
-          break;
+    try {
+      // Parallel Chunking Logic (Concurrency Limit: 4)
+      const CHUNK_SIZE = 4;
+      for (let i = 0; i < slideDeck.length; i += CHUNK_SIZE) {
+        const chunk = slideDeck.slice(i, i + CHUNK_SIZE);
+        const chunkPromises = chunk.map(async (slide, chunkIndex) => {
+          const absoluteIndex = i + chunkIndex;
+          const localPage = await browser.newPage();
+          await localPage.setViewport({ width: dimensions.width, height: dimensions.height, deviceScaleFactor: 2 });
+          try {
+            return await renderSlideToImage(localPage, slide, config, absoluteIndex, tempDir);
+          } finally {
+            await localPage.close().catch(e => console.error('Error closing page:', e));
+          }
+        });
+        
+        const chunkResults = await Promise.all(chunkPromises);
+        generatedFiles.push(...chunkResults);
       }
 
-      const injectedHtml = templateStr
-        .replace(/\{\{WIDTH\}\}/g, dimensions.width)
-        .replace(/\{\{HEIGHT\}\}/g, dimensions.height)
-        .replace(/\{\{BADGE_HTML\}\}/g, badgeHtml)
-        .replace(/\{\{WATERMARK_NUMBER\}\}/g, watermarkNum)
-        .replace(/\{\{SWIPE_ARROW_HTML\}\}/g, swipeArrowHtml)
-        .replace(/\{\{BG_COLOR\}\}/g, customBg)
-        .replace(/\{\{ACCENT_COLOR\}\}/g, customAccent)
-        .replace(/\{\{LOGO_DISPLAY\}\}/g, displayLogo)
-        .replace(/\{\{LOGO_SIZE\}\}/g, logoSize)
-        .replace(/\{\{NICHE_COLOR\}\}/g, ambientColor)
-        .replace(/\{\{OFFSET_Y\}\}/g, offsetY)
-        .replace(/\{\{CONTENT_WIDTH\}\}/g, contentWidth)
-        .replace(/\{\{TITLE_SIZE\}\}/g, titleSize)
-        .replace(/\{\{BODY_SIZE\}\}/g, bodySize)
-        .replace(/\{\{ICON_HTML\}\}/g, iconHtml)
-        .replace(/\{\{CONTENT_BLOCK\}\}/g, contentBlock);
+      generatedFiles.forEach((img, idx) => {
+        if (fs.existsSync(img)) {
+          const slideType = slideDeck[idx].type || 'slide';
+          archive.append(fs.createReadStream(img), { name: `slide_${String(idx + 1).padStart(2, '0')}_${slideType}.png` });
+        }
+      });
 
-      await page.setContent(injectedHtml, { waitUntil: 'networkidle0', url: 'http://localhost:3000' });
-      await page.evaluateHandle(() => document.fonts.ready);
-      await page.evaluateHandle(() => Promise.all(Array.from(document.images).filter(img => !img.complete).map(img => new Promise(resolve => { img.onload = img.onerror = resolve; }))));
-
-      const slidePngPath = path.join(tempDir, `slide_${i}_${timestamp}.png`);
-      await page.screenshot({ path: slidePngPath, clip: { x: 0, y: 0, width: dimensions.width, height: dimensions.height } });
-
-      archive.append(fs.createReadStream(slidePngPath), { name: `slide_${String(i + 1).padStart(2, '0')}.png` });
-      
-      // We can't delete the PNG here synchronously because archiver streams it asynchronously!
-      // We will delete them after the archive is finalized.
-    }
-
-    await archive.finalize();
-    await archivePromise; // Wait for write stream to close
-
-    // Clean up individual PNGs
-    for (let i = 0; i < slideDeck.length; i++) {
-      const slidePngPath = path.join(tempDir, `slide_${i}_${timestamp}.png`);
-      if (fs.existsSync(slidePngPath)) {
-        fs.rmSync(slidePngPath, { force: true });
-      }
+      await archive.finalize();
+      await archivePromise; // Wait for write stream to close
+    } finally {
+      // Clean up individual PNGs regardless of success/failure
+      generatedFiles.forEach(file => {
+        if (fs.existsSync(file)) {
+          fs.rmSync(file, { force: true });
+        }
+      });
     }
 
     res.setHeader('Content-Type', 'application/zip');
@@ -569,10 +516,9 @@ app.post('/api/export-batch', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error generating slide deck:', error);
-    res.status(500).json({ error: 'Failed to generate slide deck', details: error.message });
+    console.error('Error generating batch export:', error);
+    res.status(500).json({ error: 'Failed to generate batch export', details: error.message });
   } finally {
-    if (page) await page.close().catch(e => console.error(e));
     if (browser) await browser.close().catch(e => console.error(e));
   }
 });

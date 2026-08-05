@@ -1,8 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import puppeteer from 'puppeteer';
 import { PDFDocument } from 'pdf-lib';
-import { generateSlideHTML } from './templates/slide_template.js';
+import { launchBrowser, buildSelfContainedDocument } from './render_page.js';
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -40,11 +39,7 @@ async function renderEngine() {
   const slidesToRender = isDemo ? job.slides.slice(0, 1) : job.slides;
   console.log(`Starting render engine for jobId: ${job.jobId} (Demo mode: ${isDemo})`);
 
-  const browser = await puppeteer.launch({
-    headless: true,
-    executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-    args: ['--no-sandbox', '--disable-setuid-sandbox', '--allow-file-access-from-files']
-  });
+  const browser = await launchBrowser();
 
   const page = await browser.newPage();
   await page.setViewport({
@@ -56,12 +51,6 @@ async function renderEngine() {
   const renderedAssets = [];
   const warnings = [];
 
-  // Temporary dir for rendered slide HTML files
-  const tempDir = path.resolve('temp_slides');
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
-  }
-
   const pdfDoc = await PDFDocument.create();
 
   for (let i = 0; i < slidesToRender.length; i++) {
@@ -70,7 +59,7 @@ async function renderEngine() {
     const slideFilename = `slide${slideIndexStr}.png`;
     const slideOutputPath = path.join(outputDir, slideFilename);
 
-    const htmlContent = generateSlideHTML(slide, {
+    const htmlContent = buildSelfContainedDocument(slide, {
       hookVariant: job.hookVariant || 'a',
       docTitle: job.docTitle || 'FIT BIBLIA • A FOGYÁS TÖRVÉNYE',
       pageIndex: i + 1,
@@ -78,11 +67,9 @@ async function renderEngine() {
       totalSlides: job.slides.length
     });
 
-    const tempHtmlPath = path.join(tempDir, `slide_${slideIndexStr}.html`);
-    fs.writeFileSync(tempHtmlPath, htmlContent, 'utf-8');
-
-    const fileUrl = `file:///${tempHtmlPath.replace(/\\/g, '/')}`;
-    await page.goto(fileUrl, { waitUntil: 'networkidle0' });
+    // Self-contained document (fonts + CSS embedded) -> no external files, no
+    // hard-coded browser path, renders headless on any machine.
+    await page.setContent(htmlContent, { waitUntil: 'load' });
 
     // Wait for fonts to be completely ready
     await page.evaluateHandle(() => document.fonts.ready);
@@ -129,9 +116,6 @@ async function renderEngine() {
   });
 
   await browser.close();
-
-  // Clean up temp dir
-  fs.rmSync(tempDir, { recursive: true, force: true });
 
   // Generate manifest.json
   const manifest = {

@@ -133,6 +133,13 @@ export function generateSlideHTML(slide, options = {}) {
 
   const nicheHtml = slide.niche ? `<div class="niche-glow ${nicheClass}"></div>` : '';
 
+  // Style delivery: a fully self-contained inline <style> (fonts + CSS embedded)
+  // when options.inlineStyle is provided, otherwise a relative <link> (legacy
+  // file:// preview). Inline is what makes headless rendering portable.
+  const styleTag = options.inlineStyle
+    ? `<style>${options.inlineStyle}</style>`
+    : `<link rel="stylesheet" href="${options.cssHref || '../src/styles/obszidian.css'}" />`;
+
   let mainContent = '';
 
   switch (slide.type) {
@@ -230,7 +237,7 @@ export function generateSlideHTML(slide, options = {}) {
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=1080, height=1350, initial-scale=1.0" />
-  <link rel="stylesheet" href="../src/styles/obszidian.css" />
+  ${styleTag}
 </head>
 <body>
   <div class="slide-canvas">

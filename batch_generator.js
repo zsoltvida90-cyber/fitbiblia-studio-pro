@@ -1,7 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import puppeteer from 'puppeteer';
-import express from 'express';
+import { launchBrowser, buildSelfContainedDocument, mapWebSlideToEngine } from './src/render_page.js';
 
 const masterFile = path.resolve('FB4.0_30day_master_FULL.txt');
 const outputDir = path.resolve('output');
@@ -12,12 +11,8 @@ if (fs.existsSync(outputDir)) {
 }
 fs.mkdirSync(outputDir, { recursive: true });
 
-// Start local server to serve assets for Puppeteer
-const app = express();
-app.use('/assets', express.static(path.resolve('assets')));
-const server = app.listen(3001, () => {
-    console.log('Ideiglenes szerver elindítva az assetekhez a 3001-es porton.');
-});
+// Note: no asset server needed -- slides render fully self-contained (fonts and
+// CSS embedded via src/render_page.js).
 
 // Helper: Format dimensions map
 function getCanvasDimensions(canvasFormat) {
@@ -107,13 +102,7 @@ async function runBatch() {
 
     console.log(`Talált napok száma: ${days.length}`);
 
-    const browser = await puppeteer.launch({
-        headless: true,
-        args: ['--no-sandbox', '--disable-setuid-sandbox', '--allow-file-access-from-files']
-    });
-
-    const baseTemplatePath = path.resolve('templates/base_render.html');
-    const templateStr = fs.readFileSync(baseTemplatePath, 'utf-8');
+    const browser = await launchBrowser();
 
     for (let i = 0; i < days.length; i++) {
         const dayNumber = dayHeaders[i][1].padStart(2, '0');
@@ -151,77 +140,18 @@ async function runBatch() {
 
         for (let s = 0; s < slides.length; s++) {
             const currentSlide = slides[s];
-            const slideType = currentSlide.type || 'cover';
-            const badgeVal = currentSlide.badge || '';
-            const titleVal = currentSlide.headline || '';
-            const hookVal = currentSlide.hookWord || '';
-            const bodyVal = currentSlide.body || '';
-            const iconHtml = getIconHtml(currentSlide.icon, customAccent);
-            const swipeArrowHtml = getSwipeArrowHtml(slideType, customAccent);
-            const badgeHtml = badgeVal ? `<div class="badge-clean">${badgeVal}</div>` : `<div></div>`;
-            const watermarkNum = (slideType === 'cover') ? '' : String(s + 1);
 
-            let contentBlock = '';
-            switch (slideType) {
-                case 'cta':
-                    contentBlock = `
-                        <div class="title-main">${titleVal}</div>
-                        <div class="body-text" style="margin-top: 20px;">${bodyVal}</div>
-                        <div class="ig-action-bar">
-                            <div>[ ♥ LIKE ]</div>
-                            <div>[ 💬 COMMENT ]</div>
-                            <div>[ ✈ SHARE ]</div>
-                            <div>[ 💾 SAVE ]</div>
-                        </div>
-                    `;
-                    break;
-                case 'inner':
-                    contentBlock = `
-                        <div class="body-text" style="font-family: 'Archivo', sans-serif; color: #E8DFC9; text-transform: uppercase; margin-bottom: 20px; font-size: var(--title-size);">${titleVal}</div>
-                        <div class="body-text">${bodyVal}</div>
-                    `;
-                    break;
-                case 'stat':
-                    contentBlock = `
-                        <div class="body-text" style="font-family: 'Archivo', sans-serif; font-size: var(--title-size); font-weight: 800; color: #E8DFC9; text-transform: uppercase;">${titleVal}</div>
-                        <div style="font-family: 'Archivo', sans-serif; font-size: 110px; font-weight: 900; color: var(--accent); line-height: 1; margin: 20px 0;">${hookVal}</div>
-                        <div class="body-text">${bodyVal}</div>
-                    `;
-                    break;
-                case 'cover':
-                default:
-                    contentBlock = `
-                        <div class="title-main" style="font-size: var(--title-size);">${titleVal}</div>
-                        <div class="hook-word">${hookVal}</div>
-                        <div class="body-text">${bodyVal}</div>
-                    `;
-                    break;
-            }
+            // Route through the canonical Obszidián engine (self-contained HTML).
+            const engineSlide = mapWebSlideToEngine(currentSlide);
+            const injectedHtml = buildSelfContainedDocument(engineSlide, {
+                docTitle: 'FIT BIBLIA',
+                pageIndex: s + 1,
+                totalPages: slides.length
+            });
 
-            const injectedHtml = templateStr
-                .replace(/\{\{WIDTH\}\}/g, dimensions.width)
-                .replace(/\{\{HEIGHT\}\}/g, dimensions.height)
-                .replace(/\{\{BADGE_HTML\}\}/g, badgeHtml)
-                .replace(/\{\{WATERMARK_NUMBER\}\}/g, watermarkNum)
-                .replace(/\{\{SWIPE_ARROW_HTML\}\}/g, swipeArrowHtml)
-                .replace(/\{\{BG_COLOR\}\}/g, customBg)
-                .replace(/\{\{ACCENT_COLOR\}\}/g, customAccent)
-                .replace(/\{\{LOGO_DISPLAY\}\}/g, displayLogo)
-                .replace(/\{\{LOGO_SIZE\}\}/g, logoSize)
-                .replace(/\{\{NICHE_COLOR\}\}/g, ambientColor)
-                .replace(/\{\{OFFSET_Y\}\}/g, 0)
-                .replace(/\{\{CONTENT_WIDTH\}\}/g, 888)
-                .replace(/\{\{TITLE_SIZE\}\}/g, 60)
-                .replace(/\{\{BODY_SIZE\}\}/g, 26)
-                .replace(/\{\{ICON_HTML\}\}/g, iconHtml)
-                .replace(/\{\{CONTENT_BLOCK\}\}/g, contentBlock);
-
-            await page.setContent(injectedHtml, { waitUntil: 'networkidle0', url: 'http://localhost:3001' });
-            
-            // Try to wait for fonts and images
+            await page.setContent(injectedHtml, { waitUntil: 'load' });
             try {
                 await page.evaluateHandle(() => document.fonts.ready);
-                await page.evaluateHandle(() => Promise.all(Array.from(document.images).filter(img => !img.complete).map(img => new Promise(resolve => { img.onload = img.onerror = resolve; }))));
             } catch(e) {}
 
             const slidePngPath = path.join(dayDir, `slide_${(s + 1).toString().padStart(2, '0')}.png`);
@@ -232,11 +162,10 @@ async function runBatch() {
     }
 
     await browser.close();
-    server.close();
     console.log('Batch generálás sikeresen befejeződött!');
 }
 
 runBatch().catch(err => {
     console.error(err);
-    server.close();
+    process.exit(1);
 });
