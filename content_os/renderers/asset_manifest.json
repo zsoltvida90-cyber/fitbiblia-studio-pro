@@ -1,0 +1,12 @@
+{
+  "version": "visual-assets-1.0",
+  "canvas": {"width": 1080, "height": 1350},
+  "assets": {
+    "background": {"drive_id": "1eSlsd4Z8jp0-qLBwpdtpcDdbrBCbTQHE", "file_name": "Black-leather-iphone-11-pro.jpg", "sha256": "956a9fda7cbbf5fcff2b6f13d22fbde720f4c47cf2040c70ade2e06a78449fad"},
+    "gold_foil": {"drive_id": "1xNnLB4PZNS1FQuLExGeiV9-VF72UUq2I", "file_name": "gold foil.jpg", "sha256": "de15e6aca76199360c8967b42ef2746185c17e3f1b54189be4b934b1401bf03f"},
+    "logo": {"drive_id": "1eB4di39J7SB9zJSM1wt-rTmmi4KxtAdO", "file_name": "fit_biblia_logo_transparent_alt.png", "sha256": "2e676284f6aa5839a26054b84de450b3d024e54e78c833a1c327471b8041924a"},
+    "hook_font": {"drive_id": "1SYjCuKISZlpskMRiGhL22tUP-C0Axkfk", "file_name": "Fraunces-Italic.ttf", "sha256": "b24448c43702fac4ee856781d461a0dfba8d8e594b6e8e190234b75fed2c0e01"},
+    "body_regular": {"drive_id": "1XV0dNMHmmTzDlNVp28_TfowS0AjcKXYo", "archive": "Instrument_Sans.zip", "member": "static/InstrumentSans-Regular.ttf", "sha256": "a22cb26e48fd79bcb01bf2fc92d36785474dce36d9c544ab0a8868c2657c4a87"},
+    "body_semibold": {"drive_id": "1XV0dNMHmmTzDlNVp28_TfowS0AjcKXYo", "archive": "Instrument_Sans.zip", "member": "static/InstrumentSans-SemiBold.ttf", "sha256": "cb2231708f82dfef7c92c9749cd76e456033b710c677841b01e3e200348394f2"}
+  }
+}
