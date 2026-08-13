@@ -1,2 +1,3 @@
 Pillow
 reportlab
+twitter-text-parser==3.0.0
