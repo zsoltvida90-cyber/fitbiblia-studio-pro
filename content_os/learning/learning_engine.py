@@ -14,8 +14,8 @@ PROTECTED_SCIENCE_FIELDS = {
 }
 
 def classify(sample_n, distribution_gate, hypothesis='', source_asset_ids=None, early_signal_min=10, active_balance_min=20):
-    if isinstance(sample_n, bool) or not isinstance(sample_n, (int, float)) or sample_n < 0:
-        return LearningDecision('INTEGRITY_FAIL', False, 'invalid_sample_n')
+    if isinstance(sample_n, bool) or not isinstance(sample_n, (int, float)) or sample_n < 1:
+        return LearningDecision('INTEGRITY_FAIL', False, 'sample_required')
     if not isinstance(early_signal_min, (int, float)) or not isinstance(active_balance_min, (int, float)) or early_signal_min < 1 or active_balance_min <= early_signal_min:
         return LearningDecision('INTEGRITY_FAIL', False, 'invalid_thresholds')
     if distribution_gate != 'OK':
