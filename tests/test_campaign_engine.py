@@ -61,6 +61,15 @@ class CampaignEngineTests(unittest.TestCase):
         with self.assertRaisesRegex(CampaignError,"NODE_RESEARCH_REQUIRED"):
             validate_campaign_asset(self.asset(status="READY_FOR_MASTER"),node=self.node())
 
+    def test_pending_science_node_cannot_advance(self):
+        for node_status in ("RESEARCHED_PENDING_SCIENCE", "RESEARCHED_PENDING_REVIEW"):
+            with self.subTest(node_status=node_status):
+                with self.assertRaisesRegex(CampaignError,"NODE_RESEARCH_REQUIRED"):
+                    validate_campaign_asset(
+                        self.asset(status="READY_FOR_MASTER"),
+                        node=self.node(research_status=node_status, research_ids="RSH-X"),
+                    )
+
     def test_mastered_asset_requires_master(self):
         with self.assertRaisesRegex(CampaignError,"MASTER_AUTHORITY_REQUIRED"):
             validate_campaign_asset(self.asset(status="MASTERED"))
