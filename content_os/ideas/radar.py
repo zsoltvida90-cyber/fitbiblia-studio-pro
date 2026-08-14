@@ -152,6 +152,13 @@ def dedup_against(candidate: Mapping[str, object], existing_rows: Iterable[Mappi
             similar_ids.append(row_id)
         if result.score > best_score or (result.score == best_score and severity[result.status] > severity[best_status]):
             best_status, best_score, best_reason = result.status, result.score, result.reason
+    known_refs = {x.strip() for x in re.split(r'[,;]', str(candidate.get('known_master_refs') or '')) if x.strip()}
+    similar_ids.extend(sorted(known_refs))
+    if known_refs:
+        if best_score >= 0.65:
+            best_status, best_reason = 'DUPLICATE', 'source already adopted in a semantically overlapping master'
+        elif best_status == 'NEW':
+            best_status, best_reason = 'RELATED', 'source already adopted in an existing master; explicit new-angle/reuse decision required'
     return best_status, sorted(set(similar_ids))[:8], round(best_score,4), best_reason
 
 
