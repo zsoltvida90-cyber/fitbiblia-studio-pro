@@ -11,10 +11,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
+PACKAGE_STATUS = "PACKAGE_READY"
 ARCHIVE_STATUS = "ACCEPTED_ARCHIVED"
 CANONICAL_ACCEPT_COMMAND = "ELFOGADOM A TERMÉKET"
 ACCEPTANCE_ALIASES = {
     "elfogadom a termeket",
+    "elfogadom",
     "termek elfogadva",
     "mehet az archivumba",
     "ez a verzio elfogadva",
@@ -61,6 +63,13 @@ def _norm_command(value: str) -> str:
 def is_explicit_acceptance(message: str) -> bool:
     """Strict human gate. Ordinary praise like 'jó' or 'tetszik' must not archive."""
     return _norm_command(message) in ACCEPTANCE_ALIASES
+
+
+def archive_completion_state(*, drive_upload_verified: bool, ledger_write_verified: bool) -> str:
+    """Final accepted-archive state exists only after both persistent writes verify."""
+    if drive_upload_verified and ledger_write_verified:
+        return ARCHIVE_STATUS
+    return PACKAGE_STATUS
 
 
 def human_slug(title: str) -> str:
@@ -169,33 +178,38 @@ Research ID(k): {research_ids}
 Evidence Packet ID(k): {evidence_ids}
 Claim ID(k): {claim_ids}
 
-Archív állapot: {ARCHIVE_STATUS}
+Csomagállapot: {PACKAGE_STATUS}
 Publikációs állapot az elfogadáskor: {spec['publication_status']}
 
 Csomagnév:
 {archive_name}__PACKAGE.zip
 
 Fontos:
-Az emberi termékelfogadás nem jelent publikálást. Az elfogadott csomag immutábilis;
+Az emberi termékelfogadás nem jelent publikálást. A helyi csomag csak PACKAGE_READY.
+Az ACCEPTED_ARCHIVED státusz kizárólag sikeres és visszaellenőrzött Drive feltöltés +
+PRODUCT_ARCHIVE Ledger írás után adható. Az elfogadott Drive csomag immutábilis;
 minden későbbi változat új verzióként archiválandó.
 """
 
 
 def _acceptance_record(spec: dict[str, Any], archive_id: str) -> str:
+    received = spec.get("acceptance_command_received", CANONICAL_ACCEPT_COMMAND)
     return f"""# Product Acceptance Record
 
 archive_id: {archive_id}
 accepted_at: {spec['accepted_at']}
 accepted_by: {spec.get('accepted_by', 'HUMAN')}
-acceptance_command: {CANONICAL_ACCEPT_COMMAND}
+acceptance_command_received: {received}
+canonical_acceptance_command: {CANONICAL_ACCEPT_COMMAND}
 asset_id: {spec['asset_id']}
 master_id: {spec['master_id']}
 version: {spec['version']}
-archive_status: {ARCHIVE_STATUS}
+acceptance_status: HUMAN_ACCEPTED
+archive_status: {PACKAGE_STATUS}
 publication_status_at_acceptance: {spec['publication_status']}
 
-This record freezes the accepted product version for archival purposes.
-It does not assert that the product was published.
+This record freezes the accepted product version for packaging purposes.
+It does not assert publication or persistent archival completion.
 """
 
 
@@ -216,7 +230,7 @@ def validate_spec(spec: dict[str, Any]) -> None:
         _require(spec, key)
     if spec.get("acceptance_confirmed") is not True:
         raise ArchiveError("HUMAN_ACCEPTANCE_REQUIRED")
-    if spec.get("archive_status") not in (None, ARCHIVE_STATUS):
+    if spec.get("archive_status") not in (None, PACKAGE_STATUS, ARCHIVE_STATUS):
         raise ArchiveError("ARCHIVE_STATUS_INVALID")
     if not isinstance(spec["files"], list):
         raise ArchiveError("ARCHIVE_FILES_INVALID")
@@ -230,11 +244,10 @@ def build_archive_package(
     spec: dict[str, Any],
     output_root: str | Path,
 ) -> ArchiveResult:
-    """
-    Freeze one explicitly accepted product into a human-readable immutable folder + ZIP.
+    """Freeze one explicitly accepted product into a local indexed immutable candidate ZIP.
 
-    Drive upload and PRODUCT_ARCHIVE Ledger write are intentionally separate connector
-    actions performed only after this local package returns successfully.
+    This function deliberately returns PACKAGE_READY. Persistent ACCEPTED_ARCHIVED is
+    an orchestration state reached only after verified Drive upload + verified Ledger write.
     """
     validate_spec(spec)
     output_root = Path(output_root)
@@ -278,7 +291,7 @@ def build_archive_package(
 
     content_tree_sha256 = _tree_hash(copied)
     manifest = {
-        "archive_schema_version": "1.0",
+        "archive_schema_version": "1.1",
         "archive_id": spec["archive_id"],
         "title": spec["title"],
         "archive_name": archive_name,
@@ -293,12 +306,13 @@ def build_archive_package(
         "output_type": spec["output_type"],
         "version": spec["version"],
         "publication_status_at_acceptance": spec["publication_status"],
-        "archive_status": ARCHIVE_STATUS,
+        "acceptance_status": "HUMAN_ACCEPTED",
+        "archive_status": PACKAGE_STATUS,
         "renderer_version": spec.get("renderer_version", ""),
         "asset_manifest_version": spec.get("asset_manifest_version", ""),
         "qa_status": spec.get("qa_status", ""),
         "content_tree_sha256": content_tree_sha256,
-        "package_sha256_scope": "ZIP bytes; stored in PRODUCT_ARCHIVE Ledger after ZIP creation",
+        "package_sha256_scope": "ZIP bytes; authoritative value is external receipt + PRODUCT_ARCHIVE Ledger",
         "files": [
             {"path": rel, "sha256": digest}
             for rel, digest in sorted(copied)
@@ -321,12 +335,14 @@ def build_archive_package(
     receipt = {
         "archive_id": spec["archive_id"],
         "archive_name": archive_name,
-        "archive_status": ARCHIVE_STATUS,
+        "archive_status": PACKAGE_STATUS,
         "publication_status": spec["publication_status"],
         "package_path": str(zip_path),
         "package_sha256": package_sha256,
         "content_tree_sha256": content_tree_sha256,
         "ledger_sheet": "PRODUCT_ARCHIVE",
+        "drive_upload_status": "PENDING",
+        "ledger_write_status": "PENDING",
     }
     receipt_path = output_root / f"{archive_name}__ARCHIVE_RECEIPT.json"
     receipt_path.write_text(
@@ -341,13 +357,17 @@ def build_archive_package(
         package_sha256=package_sha256,
         content_tree_sha256=content_tree_sha256,
         archive_dir=str(archive_dir),
-        archive_status=ARCHIVE_STATUS,
+        archive_status=PACKAGE_STATUS,
         publication_status=str(spec["publication_status"]),
     )
 
 
 def ledger_row(result: ArchiveResult, spec: dict[str, Any], drive_folder_ref: str, drive_package_ref: str) -> list[str]:
-    """Return columns A:W for FIT_BIBLIA_CONTENT_LEDGER / PRODUCT_ARCHIVE."""
+    """Return A:W row for the persistent PRODUCT_ARCHIVE write after Drive upload."""
+    if not drive_folder_ref or not drive_package_ref:
+        raise ArchiveError("ARCHIVE_UPLOAD_FAILED")
+    if result.archive_status != PACKAGE_STATUS:
+        raise ArchiveError("ARCHIVE_STATE_INVALID")
     return [
         result.archive_id,
         str(spec["accepted_at"]),
@@ -358,7 +378,7 @@ def ledger_row(result: ArchiveResult, spec: dict[str, Any], drive_folder_ref: st
         str(spec["asset_id"]),
         str(spec["platform"]),
         str(spec["output_type"]),
-        result.archive_status,
+        ARCHIVE_STATUS,
         result.publication_status,
         drive_folder_ref,
         drive_package_ref,
