@@ -94,6 +94,13 @@ class IdeaRadarTests(unittest.TestCase):
         self.assertEqual(len(idea.to_row()),len(radar.IDEA_INBOX_COLUMNS))
         self.assertEqual(radar.IDEA_INBOX_COLUMNS[-5:],['scope_class','proposed_core_thesis','priority_score','similar_master_ids','decision_reason'])
 
+    def test_known_adopted_master_upgrades_overlap_to_duplicate(self):
+        existing=[{'master_id':'MASTER-1','topic':'Alvás és testsúly','problem':'fogyás és alvás','core_thesis':'az alvás nem kerüli meg az energiaegyensúlyt','angle':'mechanizmus'}]
+        candidate=self.base(problem='fogyás és alvás',proposed_core_thesis='az alvás nem kerüli meg az energiaegyensúlyt',known_master_refs='MASTER-1')
+        idea=radar.triage_candidate(candidate,idea_id='IDEA-20260814-001',now=NOW,existing_rows=existing)
+        self.assertEqual(idea.duplicate_status,'DUPLICATE')
+        self.assertEqual(idea.status,'DEFERRED')
+
     def test_rank_candidates_detects_in_batch_overlap(self):
         out=radar.rank_candidates([self.base(title='A'),self.base(title='B')],now=NOW)
         self.assertEqual(len(out),2)
