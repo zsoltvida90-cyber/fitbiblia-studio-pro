@@ -28,7 +28,8 @@ class ProductArchiveTests(unittest.TestCase):
         return {
             "archive_id": "ARCH-20260814-001",
             "acceptance_confirmed": True,
-            "accepted_at": "2026-08-14T10:02:00+02:00",
+            "acceptance_command_received": "Elfogadom!",
+            "accepted_at": "2026-08-14T10:23:00+02:00",
             "accepted_date": "2026-08-14",
             "accepted_by": "HUMAN",
             "title": "Alvás és testsúly",
@@ -49,6 +50,7 @@ class ProductArchiveTests(unittest.TestCase):
 
     def test_acceptance_is_strict(self):
         self.assertTrue(archive.is_explicit_acceptance("ELFOGADOM A TERMÉKET"))
+        self.assertTrue(archive.is_explicit_acceptance("Elfogadom!"))
         self.assertTrue(archive.is_explicit_acceptance("Mehet az archívumba!"))
         self.assertFalse(archive.is_explicit_acceptance("jó"))
         self.assertFalse(archive.is_explicit_acceptance("tetszik, mehet tovább"))
@@ -62,19 +64,41 @@ class ProductArchiveTests(unittest.TestCase):
             "2026-08-14__Alvas-es-testsuly__Instagram-Carousel__v1.0",
         )
 
-    def test_build_complete_package_and_preserve_publication_state(self):
+    def test_local_package_is_not_final_archive(self):
         with tempfile.TemporaryDirectory() as td:
             spec = self.base_spec(td)
             out = Path(td) / "archive"
             result = archive.build_archive_package(spec, out)
-            self.assertEqual(result.archive_status, "ACCEPTED_ARCHIVED")
+            self.assertEqual(result.archive_status, "PACKAGE_READY")
             self.assertEqual(result.publication_status, "PLANNED")
             self.assertTrue(Path(result.package_path).is_file())
             self.assertTrue((Path(result.archive_dir) / "00_INDEX.md").is_file())
             self.assertTrue((Path(result.archive_dir) / "05_MANIFESTS" / "archive_manifest.json").is_file())
+
+    def test_final_archive_requires_drive_and_ledger(self):
+        self.assertEqual(
+            archive.archive_completion_state(drive_upload_verified=False, ledger_write_verified=False),
+            "PACKAGE_READY",
+        )
+        self.assertEqual(
+            archive.archive_completion_state(drive_upload_verified=True, ledger_write_verified=False),
+            "PACKAGE_READY",
+        )
+        self.assertEqual(
+            archive.archive_completion_state(drive_upload_verified=True, ledger_write_verified=True),
+            "ACCEPTED_ARCHIVED",
+        )
+
+    def test_ledger_row_marks_final_archive_only_after_drive_ref_exists(self):
+        with tempfile.TemporaryDirectory() as td:
+            spec = self.base_spec(td)
+            result = archive.build_archive_package(spec, Path(td) / "archive")
             row = archive.ledger_row(result, spec, "folder-ref", "package-ref")
             self.assertEqual(len(row), 23)
+            self.assertEqual(row[9], "ACCEPTED_ARCHIVED")
             self.assertEqual(row[10], "PLANNED")
+            with self.assertRaisesRegex(archive.ArchiveError, "ARCHIVE_UPLOAD_FAILED"):
+                archive.ledger_row(result, spec, "", "")
 
     def test_missing_required_group_blocks(self):
         with tempfile.TemporaryDirectory() as td:
@@ -90,7 +114,7 @@ class ProductArchiveTests(unittest.TestCase):
             with self.assertRaisesRegex(archive.ArchiveError, "HUMAN_ACCEPTANCE_REQUIRED"):
                 archive.build_archive_package(spec, Path(td) / "archive")
 
-    def test_accepted_archive_is_immutable(self):
+    def test_accepted_archive_candidate_is_immutable(self):
         with tempfile.TemporaryDirectory() as td:
             spec = self.base_spec(td)
             out = Path(td) / "archive"
