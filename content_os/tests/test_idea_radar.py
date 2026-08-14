@@ -101,6 +101,14 @@ class IdeaRadarTests(unittest.TestCase):
         self.assertEqual(idea.duplicate_status,'DUPLICATE')
         self.assertEqual(idea.status,'DEFERRED')
 
+    def test_duplicate_select_requires_explicit_reuse_approval(self):
+        existing=[{'master_id':'MASTER-1','topic':'RECOVERY','problem':'esti éhség','core_thesis':'a rövid alvás növelheti az energiabevitelt','angle':'mechanizmus'}]
+        idea=radar.triage_candidate(self.base(),idea_id='IDEA-20260814-001',now=NOW,existing_rows=existing)
+        with self.assertRaisesRegex(PermissionError,'DUPLICATE_REUSE_APPROVAL_REQUIRED'):
+            radar.apply_human_decision(idea,'SELECT')
+        selected=radar.apply_human_decision(idea,'SELECT',allow_duplicate_reuse=True)
+        self.assertEqual(selected.status,'SELECTED')
+
     def test_rank_candidates_detects_in_batch_overlap(self):
         out=radar.rank_candidates([self.base(title='A'),self.base(title='B')],now=NOW)
         self.assertEqual(len(out),2)
