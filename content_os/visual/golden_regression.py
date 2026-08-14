@@ -4,7 +4,7 @@ import hashlib
 from dataclasses import dataclass, replace
 from datetime import datetime
 from pathlib import Path
-from typing import Iterable, Mapping, Sequence
+from typing import Sequence
 
 from PIL import Image, ImageChops, ImageStat
 
@@ -59,7 +59,7 @@ def create_golden_candidate(*,golden_id:str,now:datetime,archive_id:str,asset_id
     if not archive_id.strip() or not asset_id.strip() or not master_id.strip(): raise ValueError('GOLDEN_SOURCE_REQUIRED')
     if not quality_reason.strip(): raise ValueError('GOLDEN_QUALITY_REASON_REQUIRED')
     if not baseline_manifest_ref.strip(): raise ValueError('GOLDEN_MANIFEST_REQUIRED')
-    return GoldenRecord(golden_id,now.isoformat(),archive_id,asset_id,master_id,platform.upper(),output_type.upper(),role_or_series.upper(),quality_reason.strip(),component_tags.strip(),baseline_renderer_version.strip(),baseline_manifest_ref.strip(),'CANDIDATE','',''+notes)
+    return GoldenRecord(golden_id,now.isoformat(),archive_id,asset_id,master_id,platform.upper(),output_type.upper(),role_or_series.upper(),quality_reason.strip(),component_tags.strip(),baseline_renderer_version.strip(),baseline_manifest_ref.strip(),'CANDIDATE','',notes)
 
 
 def activate_golden(record:GoldenRecord,*,human_approved:bool=False,archive_verified:bool=False)->GoldenRecord:
@@ -76,12 +76,19 @@ def supersede_golden(record:GoldenRecord,new_golden_id:str,*,human_approved:bool
     return replace(record,status='SUPERSEDED',superseded_by=new_golden_id.strip())
 
 
+def _image_size(path:Path)->tuple[int,int]:
+    with Image.open(path) as im:
+        return im.size
+
+
 def _pixel_delta(a:Path,b:Path)->float:
-    ia=Image.open(a).convert('RGB'); ib=Image.open(b).convert('RGB')
-    if ia.size!=ib.size: return 100.0
-    diff=ImageChops.difference(ia,ib)
-    stat=ImageStat.Stat(diff)
-    return round(sum(stat.mean)/(3*255)*100,4)
+    with Image.open(a) as src_a, Image.open(b) as src_b:
+        ia=src_a.convert('RGB')
+        ib=src_b.convert('RGB')
+        if ia.size!=ib.size: return 100.0
+        diff=ImageChops.difference(ia,ib)
+        stat=ImageStat.Stat(diff)
+        return round(sum(stat.mean)/(3*255)*100,4)
 
 
 def compare_series(baseline_files:Sequence[str|Path],candidate_files:Sequence[str|Path],*,expected_size:tuple[int,int],copy_fingerprint_equal:bool=True,canonical_assets_equal:bool=True,intended_visual_change:bool=False,human_visual_approved:bool=False)->RegressionResult:
@@ -96,7 +103,7 @@ def compare_series(baseline_files:Sequence[str|Path],candidate_files:Sequence[st
     for a,b in zip(base,cand):
         if not a.exists() or not b.exists():
             return RegressionResult('VISUAL_REGRESSION_FAIL',len(base),len(cand),False,exact,len(base)-exact,None,'missing regression file',False)
-        if Image.open(a).size!=expected_size or Image.open(b).size!=expected_size:
+        if _image_size(a)!=expected_size or _image_size(b)!=expected_size:
             return RegressionResult('VISUAL_REGRESSION_FAIL',len(base),len(cand),False,exact,len(base)-exact,None,'dimension drift',False)
         if sha256_file(a)==sha256_file(b): exact+=1
         else: deltas.append(_pixel_delta(a,b))
