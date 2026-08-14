@@ -25,6 +25,7 @@ class CandidatePacket:
     health_risk_tier: str = ''
     scope_class: str = ''
     notes: str = ''
+    known_master_refs: str = ''
 
     def as_mapping(self) -> dict[str, Any]:
         return asdict(self)
@@ -98,6 +99,7 @@ def research_finding_packet(row: Mapping[str, object], editorial: Mapping[str, o
         source_type='RESEARCH_LIBRARY',
         source_ref=f'research://{research_id}/finding/{finding_id}',
         notes=' | '.join(note_parts),
+        known_master_refs=adopted,
         **fields,
     )
 
