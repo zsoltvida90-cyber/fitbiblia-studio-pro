@@ -264,13 +264,15 @@ def rank_candidates(candidates: Sequence[Mapping[str, object]], *, existing_rows
     return sorted(out, key=lambda x: (-x.priority_score, x.idea_id))
 
 
-def apply_human_decision(idea: RadarIdea, decision: str) -> RadarIdea:
+def apply_human_decision(idea: RadarIdea, decision: str, *, allow_duplicate_reuse: bool = False) -> RadarIdea:
     decision=str(decision or '').strip().upper()
     if decision not in VALID_DECISIONS:
         raise ValueError('invalid human decision')
     if decision == 'SELECT':
         if idea.scope_class == 'OUT_OF_SCOPE':
             raise ValueError('OUT_OF_SCOPE requires canonical scope expansion before SELECT')
+        if idea.duplicate_status == 'DUPLICATE' and not allow_duplicate_reuse:
+            raise PermissionError('DUPLICATE_REUSE_APPROVAL_REQUIRED')
         status='SELECTED'
     elif decision == 'DEFER':
         status='DEFERRED'
