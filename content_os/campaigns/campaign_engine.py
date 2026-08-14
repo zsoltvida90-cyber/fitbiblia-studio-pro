@@ -168,6 +168,40 @@ def validate_product_authority_sources(source_types: Sequence[str]) -> dict:
     }
 
 
+def validate_topic_relation(record: Mapping[str, object]) -> dict:
+    out = dict(record)
+    for field in ("relation_id", "topic_hub_id", "from_node_id", "relation_type", "to_node_id", "evidence_state", "status"):
+        if not _s(out.get(field)):
+            raise CampaignError(f"{field.upper()}_REQUIRED")
+    evidence_state = _s(out.get("evidence_state")).upper()
+    if evidence_state in {"VALIDATED", "PARTIAL_VALIDATED"} and not (
+        _s(out.get("research_ids")) or _s(out.get("evidence_packet_ids")) or _s(out.get("claim_ids"))
+    ):
+        raise CampaignError("TOPIC_RELATION_PROVENANCE_REQUIRED")
+    causal = _s(out.get("causal_status")).upper()
+    if causal in {"CAUSAL", "ESTABLISHED_CAUSAL"} and evidence_state not in {"VALIDATED", "PARTIAL_VALIDATED"}:
+        raise CampaignError("TOPIC_RELATION_CAUSAL_OVERCLAIM")
+    return out
+
+
+def validate_product_blueprint(record: Mapping[str, object]) -> dict:
+    out = dict(record)
+    for field in ("product_blueprint_id", "topic_hub_id", "product_type", "working_title",
+                  "primary_user_problem", "promised_transformation", "source_authority",
+                  "unique_paid_value", "status", "human_product_gate"):
+        if not _s(out.get(field)):
+            raise CampaignError(f"{field.upper()}_REQUIRED")
+    source_tokens = [x.strip() for x in _s(out.get("source_authority")).replace("+", "|").split("|") if x.strip()]
+    validate_product_authority_sources(source_tokens)
+    state = _s(out.get("status")).upper()
+    if (state in {"READY_FOR_PRODUCTION", "IN_PRODUCTION", "SALE_READY", "PUBLISHED"}
+            and _s(out.get("human_product_gate")).upper() not in {"APPROVED", "HUMAN_APPROVED"}):
+        raise CampaignError("HUMAN_PRODUCT_DECISION_REQUIRED")
+    if state == "PUBLISHED" and not _s(out.get("product_ref")):
+        raise CampaignError("PRODUCT_REF_REQUIRED")
+    return out
+
+
 def productization_gate(*, dossier_ready: bool, claim_integrity_ok: bool, unique_value_defined: bool,
                         human_product_decision: bool, audience_signal_available: bool = False) -> dict:
     blockers = []
