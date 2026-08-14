@@ -14,7 +14,13 @@ class AdapterTests(unittest.TestCase):
 
     def test_research_finding_cannot_claim_registry_approval(self):
         row={'finding_id':'F1','research_id':'R1','finding':'x','integrity_gate':'OK','freshness_gate':'FRESH','reusable':'YES'}
-        with self.assertRaises(ValueError): sa.research_finding_packet(row,self.editorial(evidence_readiness='KNOWN_APPROVED'))
+        with self.assertRaises(ValueError):
+            sa.research_finding_packet(row,self.editorial(evidence_readiness='KNOWN_APPROVED'))
+
+    def test_research_adopted_refs_are_structured(self):
+        row={'finding_id':'F1','research_id':'R1','finding':'x','integrity_gate':'OK','freshness_gate':'FRESH','reusable':'YES','adopted_in_refs':'MASTER-1;MASTER-2'}
+        p=sa.research_finding_packet(row,self.editorial())
+        self.assertEqual(p.known_master_refs,'MASTER-1;MASTER-2')
 
     def test_stale_research_needs_research(self):
         row={'finding_id':'F1','research_id':'R1','finding':'x','integrity_gate':'OK','freshness_gate':'STALE','reusable':'YES'}
@@ -29,7 +35,8 @@ class AdapterTests(unittest.TestCase):
         self.assertIn('not scientific truth',p.notes)
 
     def test_audience_signal_cannot_approve_claim(self):
-        with self.assertRaises(ValueError): sa.audience_signal_packet({'signal_id':'SIG-1'},self.editorial(evidence_readiness='KNOWN_APPROVED'))
+        with self.assertRaises(ValueError):
+            sa.audience_signal_packet({'signal_id':'SIG-1'},self.editorial(evidence_readiness='KNOWN_APPROVED'))
 
     def test_current_research_stays_unvalidated(self):
         p=sa.current_research_packet('web://paper-1',self.editorial(evidence_readiness='KNOWN_APPROVED'))
