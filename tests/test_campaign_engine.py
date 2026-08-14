@@ -4,7 +4,7 @@ from content_os.campaigns.campaign_engine import (
     CampaignError, campaign_balance, can_launch_campaign, dossier_readiness,
     productization_gate, threaded_feed_share, validate_campaign,
     validate_campaign_asset, validate_product_authority_sources,
-    validate_topic_hub, validate_topic_node,
+    validate_topic_hub, validate_topic_node, validate_topic_relation, validate_product_blueprint,
 )
 
 
@@ -93,6 +93,33 @@ class CampaignEngineTests(unittest.TestCase):
     def test_launch_rejects_unresearched_dossier(self):
         with self.assertRaisesRegex(CampaignError,"DOSSIER_NOT_READY"):
             can_launch_campaign(hub=self.hub(),nodes=[self.node()],campaign=self.campaign(status="APPROVED"),assets=[self.asset()],human_approved=True)
+
+    def test_relation_validated_requires_provenance(self):
+        r={"relation_id":"R1","topic_hub_id":"H1","from_node_id":"N1","relation_type":"OUTCOME",
+           "to_node_id":"N2","evidence_state":"VALIDATED","status":"ACTIVE","causal_status":"UNKNOWN"}
+        with self.assertRaisesRegex(CampaignError,"TOPIC_RELATION_PROVENANCE_REQUIRED"):
+            validate_topic_relation(r)
+
+    def test_relation_blocks_causal_overclaim(self):
+        r={"relation_id":"R1","topic_hub_id":"H1","from_node_id":"N1","relation_type":"OUTCOME",
+           "to_node_id":"N2","evidence_state":"RESEARCH_NEEDED","status":"OPEN","causal_status":"CAUSAL"}
+        with self.assertRaisesRegex(CampaignError,"TOPIC_RELATION_CAUSAL_OVERCLAIM"):
+            validate_topic_relation(r)
+
+    def test_product_blueprint_rejects_social_only_authority(self):
+        p={"product_blueprint_id":"P1","topic_hub_id":"H1","product_type":"PAID_EBOOK",
+           "working_title":"Sleep","primary_user_problem":"Confusion","promised_transformation":"Clarity",
+           "source_authority":"CAROUSEL|REEL","unique_paid_value":"Decision system",
+           "status":"RESEARCH_DEPENDENT","human_product_gate":"HUMAN_PRODUCT_DECISION_REQUIRED"}
+        with self.assertRaisesRegex(CampaignError,"PRODUCT_SOURCE_AUTHORITY_INVALID"):
+            validate_product_blueprint(p)
+
+    def test_product_blueprint_planning_state_valid(self):
+        p={"product_blueprint_id":"P1","topic_hub_id":"H1","product_type":"PAID_EBOOK",
+           "working_title":"Sleep","primary_user_problem":"Confusion","promised_transformation":"Clarity",
+           "source_authority":"TOPIC_DOSSIER|APPROVED_MASTER","unique_paid_value":"Decision system",
+           "status":"RESEARCH_DEPENDENT","human_product_gate":"HUMAN_PRODUCT_DECISION_REQUIRED"}
+        self.assertEqual(validate_product_blueprint(p)["status"],"RESEARCH_DEPENDENT")
 
 
 if __name__ == "__main__":
