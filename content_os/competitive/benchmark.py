@@ -6,6 +6,7 @@ VALID_COHORTS = {"HU_DIRECT","GLOBAL_CATEGORY_LEADER","FORMAT_MASTER","ADJACENT_
 VALID_BUCKETS = {"TOP","MID","LOW","RECENT","MANUAL"}
 VALID_PATTERN_STATUS = {"OBSERVATION","EARLY_SIGNAL","HYPOTHESIS","HUMAN_APPROVED","REJECTED"}
 VALID_CONFIDENCE = {"LOW","MEDIUM","HIGH","UNKNOWN"}
+VALID_ACCESS_LEVELS = {"FULL_CAROUSEL","CAPTION_METADATA_ONLY","METADATA_ONLY","UNKNOWN"}
 
 class BenchmarkError(ValueError):
     pass
@@ -36,6 +37,9 @@ def validate_account(record: Mapping[str, object]) -> dict:
     for k in ("follower_count","engagement_rate","growth_rate_30d","posting_frequency_30d"):
         if _s(out.get(k)) not in ("","UNKNOWN"):
             _f(out.get(k))
+    if any(_s(out.get(k)) not in ("","UNKNOWN") for k in ("follower_count","engagement_rate","growth_rate_30d","posting_frequency_30d")):
+        if not _s(out.get("metric_method")) and not _s(out.get("follower_source")):
+            raise BenchmarkError("METRIC_METHOD_REQUIRED")
     out["cohort_type"] = _s(out.get("cohort_type")).upper()
     out["platform"] = "INSTAGRAM"
     return out
@@ -53,10 +57,18 @@ def validate_swipe(record: Mapping[str, object]) -> dict:
         raise BenchmarkError("CAPTURE_TIMESTAMP_REQUIRED")
     if not _s(out.get("source_refs")):
         raise BenchmarkError("SOURCE_REF_REQUIRED")
+    access = _s(out.get("content_access_level") or "UNKNOWN").upper()
+    if access not in VALID_ACCESS_LEVELS:
+        raise BenchmarkError("CONTENT_ACCESS_LEVEL_INVALID")
     for k in ("likes","comments","views","saves_visible","shares_visible","engagement_proxy","account_baseline_proxy"):
         if _s(out.get(k)) not in ("","UNKNOWN"):
             _f(out.get(k))
+    if _s(out.get("engagement_proxy")) not in ("","UNKNOWN") and not _s(out.get("metric_method")):
+        raise BenchmarkError("METRIC_METHOD_REQUIRED")
+    if access == "FULL_CAROUSEL" and _s(out.get("format")).upper() != "CAROUSEL":
+        raise BenchmarkError("CONTENT_ACCESS_FORMAT_MISMATCH")
     out["sample_bucket"] = bucket
+    out["content_access_level"] = access
     return out
 
 def relative_performance_index(engagement_proxy, account_baseline_proxy):
@@ -88,9 +100,14 @@ def classify_pattern(sample_n: int, unique_accounts: int,
 def aggregate_pattern(records: Sequence[Mapping[str, object]], *,
                       pattern_type: str, pattern_name: str,
                       early_posts: int = 5, early_accounts: int = 3,
-                      hypothesis_posts: int = 15, hypothesis_accounts: int = 5) -> dict:
+                      hypothesis_posts: int = 15, hypothesis_accounts: int = 5,
+                      require_full_carousel: bool = False) -> dict:
     if not records:
         raise BenchmarkError("SAMPLE_REQUIRED")
+    if require_full_carousel:
+        records = [r for r in records if _s(r.get("content_access_level")).upper() == "FULL_CAROUSEL"]
+        if not records:
+            raise BenchmarkError("FULL_CAROUSEL_SAMPLE_REQUIRED")
     ids = [_s(r.get("swipe_id")) for r in records if _s(r.get("swipe_id"))]
     accounts = sorted({_s(r.get("competitor_id")) for r in records if _s(r.get("competitor_id"))})
     status = classify_pattern(len(records), len(accounts), early_posts, early_accounts,
@@ -117,6 +134,7 @@ def aggregate_pattern(records: Sequence[Mapping[str, object]], *,
         "human_approved": False,
         "auto_policy_adopt": False,
         "science_authority": False,
+        "requires_full_carousel": require_full_carousel,
     }
 
 def approve_pattern(pattern: Mapping[str, object], *, human_approved: bool = False) -> dict:
@@ -129,6 +147,9 @@ def approve_pattern(pattern: Mapping[str, object], *, human_approved: bool = Fal
 
 def science_claim_allowed_from_competitor(_: Mapping[str, object]) -> bool:
     return False
+
+def visual_rule_allowed_from_record(record: Mapping[str, object]) -> bool:
+    return _s(record.get("content_access_level")).upper() == "FULL_CAROUSEL"
 
 def metric_or_unknown(v):
     return "UNKNOWN" if v in (None,"") else v
