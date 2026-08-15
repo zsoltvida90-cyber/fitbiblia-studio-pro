@@ -42,6 +42,33 @@ class AdapterTests(unittest.TestCase):
         p=sa.current_research_packet('web://paper-1',self.editorial(evidence_readiness='KNOWN_APPROVED'))
         self.assertEqual(p.evidence_readiness,'RESEARCH_NEEDED')
 
+    def test_external_podcast_becomes_external_knowledge_not_approved(self):
+        src={
+            'source_type':'PODCAST_TRANSCRIPT',
+            'source_ref':'https://example.com/podcast/1',
+            'title':'Researcher interview',
+            'creator':'Dr Example',
+            'transcript_locator':'00:15:10-00:18:00',
+            'primary_artifact_refs':'preprint://example-1',
+            'review_state':'AUTHOR_REPORTED',
+        }
+        p=sa.external_source_packet(src,self.editorial())
+        self.assertEqual(p.source_type,'EXTERNAL_KNOWLEDGE')
+        self.assertEqual(p.evidence_readiness,'RESEARCH_NEEDED')
+        self.assertIn('knowledge_lane=EXPERT_CONTEXT',p.notes)
+        self.assertIn('primary_artifact_refs=preprint://example-1',p.notes)
+        self.assertIn('transcript_locator=00:15:10-00:18:00',p.notes)
+
+    def test_external_source_cannot_claim_registry_approval(self):
+        src={'source_type':'YOUTUBE_TRANSCRIPT','source_ref':'https://youtu.be/x','title':'Talk','creator':'Researcher'}
+        with self.assertRaisesRegex(ValueError,'EXTERNAL_SOURCE_NOT_CLAIM_AUTHORITY'):
+            sa.external_source_packet(src,self.editorial(evidence_readiness='KNOWN_APPROVED'))
+
+    def test_external_source_requires_creator_provenance(self):
+        src={'source_type':'PODCAST_TRANSCRIPT','source_ref':'https://example.com/p','title':'Episode'}
+        with self.assertRaisesRegex(ValueError,'EXTERNAL_SOURCE_CREATOR_REQUIRED'):
+            sa.external_source_packet(src,self.editorial())
+
     def test_missing_editorial_synthesis_rejected(self):
         with self.assertRaisesRegex(ValueError,'CANDIDATE_SYNTHESIS_REQUIRED'):
             sa.manual_packet({'title':'x'})
