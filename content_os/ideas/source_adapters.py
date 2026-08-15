@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, asdict
 from typing import Mapping, Any
 
+from content_os.research.external_sources import normalize_external_source
+
 VALID_EVIDENCE = {'KNOWN_APPROVED','REUSABLE_RESEARCH','RESEARCH_NEEDED','CONTESTED','UNSUPPORTED','UNKNOWN'}
 
 @dataclass(frozen=True)
@@ -131,6 +133,32 @@ def current_research_packet(source_ref: str, editorial: Mapping[str, object]) ->
         source_type='CURRENT_RESEARCH',
         source_ref=str(source_ref).strip(),
         notes='Fresh external/current source candidate. Science validation and Research Library save are still required before material publishable claims.',
+        **fields,
+    )
+
+
+def external_source_packet(source: Mapping[str, object], editorial: Mapping[str, object]) -> CandidatePacket:
+    normalized = normalize_external_source(source)
+    fields = _editorial_fields(editorial)
+    if fields['evidence_readiness'] == 'KNOWN_APPROVED':
+        raise ValueError('EXTERNAL_SOURCE_NOT_CLAIM_AUTHORITY')
+    if fields['evidence_readiness'] == 'UNKNOWN':
+        fields['evidence_readiness'] = 'RESEARCH_NEEDED'
+    notes = ' | '.join(filter(None, [
+        f'external_source_type={normalized.source_type}',
+        f'creator={normalized.creator}',
+        f'knowledge_lane={normalized.knowledge_lane}',
+        f'source_role={normalized.source_role}',
+        f'review_state={normalized.review_state}',
+        f'transcript_locator={normalized.transcript_locator}' if normalized.transcript_locator else '',
+        f'primary_artifact_refs={normalized.primary_artifact_refs}' if normalized.primary_artifact_refs else '',
+        normalized.notes,
+        'External source may seed a question, alternative model, case or research lead; factual claim authority is never upgraded automatically.',
+    ]))
+    return CandidatePacket(
+        source_type='EXTERNAL_KNOWLEDGE',
+        source_ref=normalized.source_ref,
+        notes=notes,
         **fields,
     )
 
