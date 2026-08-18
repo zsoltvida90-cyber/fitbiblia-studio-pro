@@ -1,0 +1,74 @@
+name: Fit Biblia E2E Integration
+
+on:
+  push:
+    branches:
+      - integration/e2e-automation-v1
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  integrate-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout integration branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: integration/e2e-automation-v1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install runtime test dependencies
+        run: python -m pip install --upgrade pip pillow
+
+      - name: Verify contract and install payload
+        run: python tools/install_e2e_payload.py
+
+      - name: Compile integrated runtime
+        run: |
+          python -m compileall -q \
+            content_os/orchestration \
+            content_os/knowledge_pipeline \
+            content_os/visual_pipeline \
+            content_os/archive_pipeline \
+            content_os/distribution_pipeline \
+            content_os/integration_bridge
+
+      - name: Run integration bridge runtime contracts
+        run: python -m unittest discover -s tests/integration_bridge -v
+
+      - name: Run existing Content OS tests
+        run: python -m unittest discover -s content_os/tests -v
+
+      - name: Diff hygiene
+        run: git diff --check
+
+      - name: Commit generated integrated runtime after PASS
+        shell: bash
+        run: |
+          git config user.name "fitbiblia-integration-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add \
+            content_os/orchestration \
+            content_os/knowledge_pipeline \
+            content_os/visual_pipeline \
+            content_os/archive_pipeline \
+            content_os/distribution_pipeline \
+            content_os/integration_bridge \
+            tests/integration_bridge \
+            INTEGRATION_BRIDGE_V1_CONTRACT_LOCK.json \
+            INTEGRATION_BRIDGE_V1_INSTALL_RECEIPT.json \
+            docs/FITBIBLIA_INTEGRATION_BRIDGE_V1_MERGE_PLAN.md \
+            docs/FITBIBLIA_INTEGRATION_BRIDGE_V1_AUDIT_RESOLUTION.md
+          if git diff --cached --quiet; then
+            echo "No generated runtime changes to commit."
+            exit 0
+          fi
+          git commit -m "Integrate Fit Biblia E2E automation runtime v1"
+          git push origin HEAD:integration/e2e-automation-v1
