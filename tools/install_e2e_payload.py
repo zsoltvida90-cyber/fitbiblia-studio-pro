@@ -24,6 +24,13 @@ LOCKED_BLOBS = {
     "content_os/renderers/asset_manifest.json": "63f1456a2cf32b9f74f39ec87efef96fdbf3e6c3",
 }
 
+PART_SHA256 = {
+    1: "dc9ee7a6515331efc3b7aed1637c5a1e01816cf51386816e7152556f3fd3cf48",
+    2: "21c02780d69570a96239f0b6560b61aafe4fc679df076bd0bcd047d393126421",
+    3: "3dd3b9d372556237b90642af1a21adb8a82a780a609f5aab5c2f6f15306328a1",
+    4: "3dc49e603caef0f8925bfdd94f4fa839e060e934962789daf5f274f3ada126ec",
+}
+
 PROTECTED_PREFIXES = tuple(LOCKED_BLOBS)
 PAYLOAD_PARTS = [ROOT / "tools" / f"e2e_payload_part{i}.txt" for i in range(1, 5)]
 
@@ -50,9 +57,21 @@ def load_payload() -> bytes:
     missing = [str(p.relative_to(ROOT)) for p in PAYLOAD_PARTS if not p.is_file()]
     if missing:
         raise SystemExit("PAYLOAD_PART_MISSING:" + ",".join(missing))
-    encoded = "".join(p.read_text(encoding="utf-8").strip() for p in PAYLOAD_PARTS)
+    chunks = []
+    failures = []
+    for i, p in enumerate(PAYLOAD_PARTS, 1):
+        raw = p.read_bytes()
+        actual = hashlib.sha256(raw).hexdigest()
+        expected = PART_SHA256[i]
+        if actual != expected:
+            failures.append(f"PAYLOAD_PART_HASH_MISMATCH:part={i}:bytes={len(raw)}:expected={expected}:actual={actual}")
+        chunks.append(raw.decode("utf-8").strip())
+    if failures:
+        raise SystemExit("\n".join(failures))
+    encoded = "".join(chunks)
     try:
-        return lzma.decompress(base64.b64decode(encoded))
+        compressed = base64.b64decode(encoded, validate=True)
+        return lzma.decompress(compressed)
     except Exception as exc:
         raise SystemExit(f"PAYLOAD_DECODE_FAIL:{exc}") from exc
 
@@ -97,6 +116,7 @@ def write_receipt(written: list[str]) -> None:
     receipt = {
         "status": "INSTALLED_TO_INTEGRATION_BRANCH_WORKTREE",
         "protected_contract_verified": True,
+        "payload_parts_verified": True,
         "written_files": [],
     }
     for rel in sorted(written):
