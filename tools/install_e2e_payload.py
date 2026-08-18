@@ -24,15 +24,17 @@ LOCKED_BLOBS = {
     "content_os/renderers/asset_manifest.json": "63f1456a2cf32b9f74f39ec87efef96fdbf3e6c3",
 }
 
-PART_SHA256 = {
-    1: "dc9ee7a6515331efc3b7aed1637c5a1e01816cf51386816e7152556f3fd3cf48",
-    2: "21c02780d69570a96239f0b6560b61aafe4fc679df076bd0bcd047d393126421",
-    3: "3dd3b9d372556237b90642af1a21adb8a82a780a609f5aab5c2f6f15306328a1",
-    4: "3dc49e603caef0f8925bfdd94f4fa839e060e934962789daf5f274f3ada126ec",
-}
+PAYLOAD_PARTS = [
+    (ROOT / "tools/e2e_payload_part1a.txt", "661b067ca8df36f0a5ffa23d02577df68c3234989cc72c88c96decc8888073bd"),
+    (ROOT / "tools/e2e_payload_part1b.txt", "0a25888780cd8f7be384638d0f941d7a573e713077e3d6710f2d02f9e2dcb800"),
+    (ROOT / "tools/e2e_payload_part1c.txt", "c9988aa79d6a580f794fe7f8145092cbfdd3fcbcb0223edc38362efc6a263254"),
+    (ROOT / "tools/e2e_payload_part1d.txt", "ce20280b8cb11b501156f47439466729e26fb9a3f45b1ebe4c84c2036a3d85fb"),
+    (ROOT / "tools/e2e_payload_part2.txt", "21c02780d69570a96239f0b6560b61aafe4fc679df076bd0bcd047d393126421"),
+    (ROOT / "tools/e2e_payload_part3.txt", "3dd3b9d372556237b90642af1a21adb8a82a780a609f5aab5c2f6f15306328a1"),
+    (ROOT / "tools/e2e_payload_part4.txt", "3dc49e603caef0f8925bfdd94f4fa839e060e934962789daf5f274f3ada126ec"),
+]
 
-PROTECTED_PREFIXES = tuple(LOCKED_BLOBS)
-PAYLOAD_PARTS = [ROOT / "tools" / f"e2e_payload_part{i}.txt" for i in range(1, 5)]
+PROTECTED_PATHS = set(LOCKED_BLOBS)
 
 
 def git_blob_sha(data: bytes) -> str:
@@ -54,17 +56,18 @@ def verify_repo_contract() -> None:
 
 
 def load_payload() -> bytes:
-    missing = [str(p.relative_to(ROOT)) for p in PAYLOAD_PARTS if not p.is_file()]
-    if missing:
-        raise SystemExit("PAYLOAD_PART_MISSING:" + ",".join(missing))
     chunks = []
     failures = []
-    for i, p in enumerate(PAYLOAD_PARTS, 1):
+    for p, expected in PAYLOAD_PARTS:
+        if not p.is_file():
+            failures.append(f"PAYLOAD_PART_MISSING:{p.relative_to(ROOT)}")
+            continue
         raw = p.read_bytes()
         actual = hashlib.sha256(raw).hexdigest()
-        expected = PART_SHA256[i]
         if actual != expected:
-            failures.append(f"PAYLOAD_PART_HASH_MISMATCH:part={i}:bytes={len(raw)}:expected={expected}:actual={actual}")
+            failures.append(
+                f"PAYLOAD_PART_HASH_MISMATCH:path={p.relative_to(ROOT)}:bytes={len(raw)}:expected={expected}:actual={actual}"
+            )
         chunks.append(raw.decode("utf-8").strip())
     if failures:
         raise SystemExit("\n".join(failures))
@@ -84,7 +87,7 @@ def safe_members(tf: tarfile.TarFile):
         target = (ROOT / name).resolve()
         if ROOT.resolve() not in target.parents and target != ROOT.resolve():
             raise SystemExit(f"PAYLOAD_PATH_ESCAPE:{member.name}")
-        if name in PROTECTED_PREFIXES:
+        if name in PROTECTED_PATHS:
             raise SystemExit(f"PROTECTED_OVERWRITE_ATTEMPT:{name}")
         if member.issym() or member.islnk():
             raise SystemExit(f"PAYLOAD_LINK_FORBIDDEN:{name}")
